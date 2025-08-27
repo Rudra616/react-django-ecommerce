@@ -4,6 +4,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.encoding import force_bytes
+from django.core.mail import send_mail
 
 from .models import User, Product ,Order, Payment ,Cart
 from .serializers import (
@@ -13,14 +17,15 @@ from .serializers import (
     OrderSerializer,
     OrderCreateSerializer, 
     PaymentSerializer,
-    CartSerializer
+    CartSerializer,
+    UserProfileSerializer
 )
 
 # ✅ Register User
 class UserRegistrationView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserRegistrationSerializer
-    permission_classes = [AllowAny]
+    queryset = User.objects.all()  # all data fetch
+    serializer_class = UserRegistrationSerializer # serilazer connect
+    permission_classes = [AllowAny]  # permission
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -52,13 +57,29 @@ class UserLoginView(generics.GenericAPIView):
 # ✅ Get / Update User Profile
 class UserDetailView(generics.RetrieveUpdateAPIView):
     queryset = User.objects.all()
-    serializer_class = UserRegistrationSerializer
+    serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
-        """Return the current logged-in user"""
         return self.request.user
 
+    def retrieve(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_object())
+        return Response({
+            "message": "User profile fetched successfully",
+            "user": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        serializer = self.get_serializer(self.get_object(), data=request.data, partial=partial)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "Profile updated successfully",
+                "user": serializer.data
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # ✅ Logout (Blacklist JWT token)
 class UserLogoutView(APIView):  
@@ -81,7 +102,7 @@ class UserLogoutView(APIView):
 class ProductListCreateView(generics.ListCreateAPIView):
     queryset = Product.objects.all().order_by('-created_at')
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    # permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     # Enable filtering, searching, ordering
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -97,7 +118,7 @@ class ProductListCreateView(generics.ListCreateAPIView):
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    # permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 # ---------------- List & Create Orders ----------------
 
@@ -117,6 +138,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
         return {'request': self.request}  # pass request for user
 
 # ---------------- Retrieve & Update Order Status ----------------
+
 class OrderDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     queryset = Order.objects.all()
@@ -159,3 +181,57 @@ class CartDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Cart.objects.filter(user=self.request.user)
+
+
+
+class ForgotPasswordView(APIView):
+    def post(self, request):
+        email = request.data.get("email")
+        try:
+            user = User.objects.get(email=email)
+
+            # Create reset token
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+
+            # Reset link for frontend
+            reset_link = f"http://localhost:3000/reset-password/{uid}/{token}/"
+
+            # Send email
+            send_mail(
+                subject="Password Reset Request",
+                message=f"Hi {user.username},\n\nClick below to reset your password:\n{reset_link}\n\nIf you didn’t request this, ignore this email.",
+                from_email="noreply@yourapp.com",
+                recipient_list=[email],
+            )
+
+            return Response({"message": "Password reset email sent."}, status=200)
+
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ResetPasswordView(APIView):
+    def post(self, request, uidb64, token):
+        try:
+            # Decode user ID
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = User.objects.get(pk=uid)
+
+            # Validate token
+            if not default_token_generator.check_token(user, token):
+                return Response({"error": "Invalid or expired token"}, status=400)
+
+            # Get new password
+            new_password = request.data.get("password")
+            if not new_password:
+                return Response({"error": "Password is required"}, status=400)
+
+            # Save new password
+            user.set_password(new_password)
+            user.save()
+
+            return Response({"message": "Password reset successful"}, status=200)
+
+        except Exception:
+            return Response({"error": "Invalid request"}, status=400)

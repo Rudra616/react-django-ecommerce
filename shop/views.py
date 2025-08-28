@@ -9,7 +9,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.core.mail import send_mail
 
-from .models import User, Product ,Order, Payment ,Cart
+from .models import User, Product ,Order, Payment ,Cart ,Review
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
@@ -18,7 +18,8 @@ from .serializers import (
     OrderCreateSerializer, 
     PaymentSerializer,
     CartSerializer,
-    UserProfileSerializer
+    UserProfileSerializer,
+    ReviewSerializer
 )
 
 # ✅ Register User
@@ -235,3 +236,31 @@ class ResetPasswordView(APIView):
 
         except Exception:
             return Response({"error": "Invalid request"}, status=400)
+
+
+
+
+
+
+class ReviewListCreateView(generics.ListCreateAPIView):
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_quaryset(self):
+        product_id = self.kwargs["product_id"]
+        return Review.objects.filter(product_id=product_id)
+    
+    def perform_create(self, serializer):
+        #Decide how to save a new object (add user, product, etc.).
+        product_id = self.kwargs["product_id"]
+        # /products/7/reviews/ → self.kwargs = {"product_id": 7}.
+        serializer.save(user=self.request.user,product_id=product_id)
+
+
+class ReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        #Decide which records to fetch from DB (filtering).
+        return Review.objects.filter(user=self.request.user)

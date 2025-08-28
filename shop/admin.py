@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Category, Product, Cart, Order, OrderItem, Payment
+from .models import User, Category, Product, Cart, Order, OrderItem, Payment,Review
 
 # Inline for OrderItem
 class OrderItemInline(admin.TabularInline):
@@ -22,3 +22,6 @@ admin.site.register(User)
 # admin.site.register(Product)
 # admin.site.register(Cart)
 admin.site.register(Payment)
+
+
+admin.site.register(Review)

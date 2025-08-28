@@ -4,7 +4,7 @@ import re  # Regular expressions for validation
 from datetime import date
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .models import Product , Order, OrderItem, Payment, Product ,Cart
+from .models import Product , Order, OrderItem, Payment, Product ,Cart,Review
 User = get_user_model()
 
 
@@ -317,3 +317,15 @@ class CartSerializer(serializers.ModelSerializer):
     
 
 
+
+
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField(read_only= True)
+    product = serializers.PrimaryKeyRelatedField(read_only=True)  # ✅ add this
+
+    class Meta:
+        model = Review
+        fields = ["id", "user", "product", "rating", "comment", "created_at"]
+        read_only_fields = ["id", "user", "created_at"]

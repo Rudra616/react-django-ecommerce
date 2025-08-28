@@ -9,7 +9,7 @@ from .views import (
     OrderListCreateView,
     OrderDetailView,
     PaymentCreateView,
-    CartListCreateView, CartDetailView ,ForgotPasswordView,ResetPasswordView
+    CartListCreateView, CartDetailView ,ForgotPasswordView,ResetPasswordView,ReviewListCreateView,ReviewDetailView
 )
 
 urlpatterns = [
@@ -37,5 +37,9 @@ urlpatterns = [
 
     path('password/forgot/', ForgotPasswordView.as_view(), name='forgot-password'),
     path('password/reset/<uidb64>/<token>/', ResetPasswordView.as_view(), name='reset-password'),
+
+
+    path("products/<int:product_id>/reviews/", ReviewListCreateView.as_view(), name="review-list-create"),
+    path("reviews/<int:pk>/", ReviewDetailView.as_view(), name="review-detail"),
 
 ]

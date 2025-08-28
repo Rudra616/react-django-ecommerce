@@ -95,3 +95,20 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment for Order #{self.order.id} - {self.status}"
+
+
+
+
+class Review(models.Model):
+    user = models.ForeignKey(User,on_delete=models.CASCADE,related_name="reviews")
+    product = models.ForeignKey(Product,on_delete=models.CASCADE,related_name="reviews")
+    rating = models.PositiveSmallIntegerField(default=0)
+    comment = models.TextField(blank=True,null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "product")  
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.product.name} ({self.rating})"

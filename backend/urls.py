@@ -22,7 +22,9 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('',include('shop.urls'))
+    path('',include('shop.urls')),
+    path("api/auth/", include("djoser.urls")),      # registration, user management, activation, reset password
+    path("api/auth/", include("djoser.urls.jwt")),  # JW
 ]
 
 if settings.DEBUG:

@@ -21,7 +21,6 @@ import os
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -61,7 +60,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework_simplejwt',
     
-
+    "djoser",
     "rest_framework_simplejwt.token_blacklist",  # 👈 needed for logout
 
     # Your apps
@@ -72,6 +71,7 @@ AUTH_USER_MODEL = 'shop.User'  # If you're using a custom user model
 
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -164,9 +164,9 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    # 'DEFAULT_PERMISSION_CLASSES': (
-    #     'rest_framework.permissions.IsAuthenticatedOrReadOnly',
-    # ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
@@ -180,8 +180,12 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=20),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=2),   # short-lived access
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),     # refresh lasts 1 day
+    "BLACKLIST_AFTER_ROTATION": True,                # blacklist when rotated
+    "AUTH_HEADER_TYPES": ("Bearer",),
+                        "ROTATE_REFRESH_TOKENS": True,
+                # JWT in "Authorization: Bearer ..."
 }
 
 
@@ -191,3 +195,16 @@ EMAIL_PORT = config("EMAIL_PORT", cast=int, default=587)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", cast=bool, default=True)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
+
+
+
+FRONTEND_URL =config("FRONTEND_URL")  # change in production
+
+
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # React dev server
+    config("FRONTEND_URL", default="http://localhost:5173")
+]
+
+CORS_ALLOW_CREDENTIALS = True

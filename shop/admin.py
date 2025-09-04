@@ -18,9 +18,9 @@ class OrderAdmin(admin.ModelAdmin):
 
 # Optional: register other models
 admin.site.register(User)
-# admin.site.register(Category)
-# admin.site.register(Product)
-# admin.site.register(Cart)
+admin.site.register(Category)
+admin.site.register(Product)
+admin.site.register(Cart)
 admin.site.register(Payment)
 
 

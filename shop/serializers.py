@@ -4,29 +4,16 @@ import re  # Regular expressions for validation
 from datetime import date
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .models import Product , Order, OrderItem, Payment, Product ,Cart,Review
+from .models import Product , Order, OrderItem, Payment, Product ,Cart,Review ,Category
 User = get_user_model()
 
+from datetime import timedelta
 
 
 import re
 from datetime import date
 from rest_framework import serializers
 from .models import User
-
-
-# ==================== USER REGISTRATION ====================
-import re
-from datetime import date
-from rest_framework import serializers
-from .models import User
-
-
-import re
-from datetime import date
-from rest_framework import serializers
-from .models import User
-
 
 # ---------------- REGISTER ----------------
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -225,6 +212,20 @@ class UserLoginSerializer(serializers.Serializer):
             }
         }
 
+class ProductOrderSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'price', 'image_url']
+
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -235,13 +236,8 @@ class ProductSerializer(serializers.ModelSerializer):
 
 
 
-# ---------------- OrderItem Serializer ----------------
-class OrderItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OrderItem
-        fields = ['product', 'quantity']
 
-
+# ---------------- Order Create Serializer ----------------
 
 # ---------------- Payment Serializer ----------------
 class PaymentSerializer(serializers.ModelSerializer):
@@ -255,18 +251,125 @@ class PaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"amount": "Payment amount must match order total."})
         return data
 
+
+
+
+
+# In your serializers.py - Update CartSerializer
+class CartSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)  # Include full product data
+    product_id = serializers.IntegerField(write_only=True)  # For writing only
+
+    class Meta:
+        model = Cart
+        fields = ['id', 'user', 'product', 'product_id', 'quantity']
+        read_only_fields = ['user', 'product']
+
+    def create(self, validated_data):
+        # Get the product instance
+        product_id = validated_data.pop('product_id')
+        product = Product.objects.get(id=product_id)
+        
+        # Check if item already exists
+        user = self.context['request'].user
+        try:
+            cart_item = Cart.objects.get(user=user, product=product)
+            cart_item.quantity += validated_data.get('quantity', 1)
+            cart_item.save()
+            return cart_item
+        except Cart.DoesNotExist:
+            return Cart.objects.create(user=user, product=product, **validated_data)
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField(read_only= True)
+    product = serializers.PrimaryKeyRelatedField(read_only=True)  # ✅ add this
+
+    class Meta:
+        model = Review
+        fields = ["id", "user", "product", "rating", "comment", "created_at"]
+        read_only_fields = ["id", "user", "created_at"]
+
+
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    # SerializerMethodField to get first product image
+    product_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Category
+        fields = ["id", "name", "image", "created_at", "product_image"]
+
+    def get_product_image(self, obj):
+        # Use the related_name 'products' to access all products of this category
+        first_product = obj.products.first()  # Returns first Product instance or None
+        if first_product and first_product.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(first_product.image.url)
+            return first_product.image.url
+        return None
+
+
+# ---------------- Product Order Serializer ----------------
+
+
+# ---------------- OrderItem Serializer ----------------
+class OrderItemSerializer(serializers.ModelSerializer):
+    product = ProductOrderSerializer(read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_image = serializers.SerializerMethodField()
+    product_price = serializers.DecimalField(
+        source="product.price", max_digits=10, decimal_places=2, read_only=True
+    )
+    subtotal = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "product_image",
+            "product_price",
+            "quantity",
+            "subtotal",
+        ]
+
+    def get_product_image(self, obj):
+        if obj.product and obj.product.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.product.image.url)
+            return obj.product.image.url
+        return None
+
+    def get_subtotal(self, obj):
+        return obj.quantity * (obj.price or obj.product.price)
+
 # ---------------- Order Serializer ----------------
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
-        fields = ['id', 'user', 'items', 'total_price', 'status']
+        fields = ["id", "status", "total_price", "created_at", "delivery_date", "items"]
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        # Ensure each item has access to request context
+        items_data = []
+        for item in instance.items.all():
+            item_serializer = OrderItemSerializer(item, context=self.context)
+            items_data.append(item_serializer.data)
+        representation['items'] = items_data
+        return representation
 
 
 # ---------------- Order Create Serializer ----------------
 class OrderCreateSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True)
+    items = OrderItemSerializer(many=True, write_only=True)
 
     class Meta:
         model = Order
@@ -288,8 +391,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     {"product": f"{product.name} has only {product.stock} items left"}
                 )
 
-            # create order item
-            OrderItem.objects.create(order=order, product=product, quantity=quantity)
+            # create order item with price at time of order
+            order_item = OrderItem.objects.create(
+                order=order, 
+                product=product, 
+                quantity=quantity,
+                price=product.price  # Store price at order time
+            )
 
             # update stock
             product.stock -= quantity
@@ -300,32 +408,3 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         order.total_price = total_price
         order.save()
         return order
-
-
-
-
-class CartSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Cart
-        fields = ['id', 'user', 'product', 'quantity']
-        read_only_fields = ['user']
-
-    def create(self, validated_data):
-        user = self.context['request'].user
-        validated_data['user'] = user
-        return super().create(validated_data)
-    
-
-
-
-
-
-
-class ReviewSerializer(serializers.ModelSerializer):
-    user = serializers.StringRelatedField(read_only= True)
-    product = serializers.PrimaryKeyRelatedField(read_only=True)  # ✅ add this
-
-    class Meta:
-        model = Review
-        fields = ["id", "user", "product", "rating", "comment", "created_at"]
-        read_only_fields = ["id", "user", "created_at"]

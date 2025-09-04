@@ -9,6 +9,7 @@ class User(AbstractUser):
     address = models.CharField(max_length=255, blank=True, null=True)
     state = models.CharField(max_length=100, blank=True, null=True)
     district = models.CharField(max_length=100, blank=True, null=True)
+    email = models.EmailField(unique=True)
 
     def __str__(self):
         return self.username
@@ -52,25 +53,27 @@ class Cart(models.Model):
 # ✅ Order model
 class Order(models.Model):
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled')
+        ("pending", "Pending"),
+        ("processing", "Processing"),
+        ("shipped", "Shipped"),
+        ("delivered", "Delivered"),
+        ("cancelled", "Cancelled"),
+        ("completed", "Completed"),
     ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="orders")
-    products = models.ManyToManyField(Product, through='OrderItem')
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    delivery_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return f"Order #{self.id} by {self.user.username}"
 
 # ✅ OrderItem (through table for Order-Product)
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
     price = models.DecimalField(max_digits=10, decimal_places=2)  # price at order time
@@ -78,6 +81,8 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"{self.product.name} ({self.quantity})"
 
+    def subtotal(self):
+        return self.quantity * self.price
 # ✅ Payment model
 class Payment(models.Model):
     PAYMENT_STATUS = [

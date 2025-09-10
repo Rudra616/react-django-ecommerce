@@ -368,7 +368,7 @@ class ReviewSerializer(serializers.ModelSerializer):
 class CategorySerializer(serializers.ModelSerializer):
     # SerializerMethodField to get first product image
     product_image = serializers.SerializerMethodField()
-
+    image = serializers.SerializerMethodField()  
     class Meta:
         model = Category
         fields = ["id", "name", "image", "created_at", "product_image"]
@@ -382,6 +382,16 @@ class CategorySerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(first_product.image.url)
             return first_product.image.url
         return None
+
+
+    def get_image(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.image.url)  # ✅ full URL
+            return obj.image.url
+        return None
+
 
 
 # ---------------- Product Order Serializer ----------------

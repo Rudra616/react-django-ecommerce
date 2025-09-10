@@ -5,7 +5,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     # User Auth
     UserRegistrationView, UserLoginView, UserDetailView, UserLogoutView,
-    EmailVerificationView, ForgotPasswordView, ResetPasswordView,
+    EmailVerificationView, ForgotPasswordView, ResetPasswordView,ChangePasswordView,EmailChangeVerificationView,
 
     # Products & Categories
     ProductListCreateView, ProductDetailView,
@@ -18,7 +18,7 @@ from .views import (
     CartListCreateView, CartDetailView,
 
     # Payments
-    PaymentCreateView,
+    PaymentCreateView,PaymentListView,PaymentConfirmView,stripe_webhook,
 
     # Reviews
     ReviewListCreateView, ReviewDetailView,
@@ -29,6 +29,10 @@ urlpatterns = [
     path("register/", UserRegistrationView.as_view(), name="register"),
     path("login/", UserLoginView.as_view(), name="login"),
     path("user/", UserDetailView.as_view(), name="user-detail"),
+    path("user/change-password/", ChangePasswordView.as_view(), name="change-password"),
+    path("verify-email-change/<uidb64>/<token>/<new_email_b64>/", 
+         EmailChangeVerificationView.as_view(), 
+         name="verify-email-change"),
     path("logout/", UserLogoutView.as_view(), name="logout"),
     path("verify-email/<uidb64>/<token>/", EmailVerificationView.as_view(), name="verify-email"),
     path("password/forgot/", ForgotPasswordView.as_view(), name="forgot-password"),
@@ -53,6 +57,11 @@ urlpatterns = [
 
     # ------------------ PAYMENTS ------------------
     path("payments/", PaymentCreateView.as_view(), name="payment-create"),
+    path("payments/list/", PaymentListView.as_view(), name="payment-list"),  # Add this
+    # Add these to your urlpatterns in urls.py
+    path("payments/confirm/", PaymentConfirmView.as_view(), name="payment-confirm"),
+    path("stripe/webhook/", stripe_webhook, name="stripe-webhook"),
+
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
     # ------------------ REVIEWS ------------------

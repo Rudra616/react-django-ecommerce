@@ -26,7 +26,11 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config("SECRET_KEY")
+import stripe
+STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = config("STRIPE_PUBLISHABLE_KEY")
 
+stripe.api_key = STRIPE_SECRET_KEY
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config("DEBUG", default=False, cast=bool)
 
@@ -150,8 +154,8 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'          # URL to access static files
+STATIC_ROOT = BASE_DIR / 'static'  # Where collectstatic will put them
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -180,12 +184,11 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=2),   # short-lived access
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),     # refresh lasts 1 day
-    "BLACKLIST_AFTER_ROTATION": True,                # blacklist when rotated
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),   # Reasonable access time
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),     # Refresh lasts 7 days
+    "BLACKLIST_AFTER_ROTATION": False,
     "AUTH_HEADER_TYPES": ("Bearer",),
-                        "ROTATE_REFRESH_TOKENS": True,
-                # JWT in "Authorization: Bearer ..."
+    "ROTATE_REFRESH_TOKENS": True,
 }
 
 

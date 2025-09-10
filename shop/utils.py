@@ -57,26 +57,28 @@ def send_email_change_verification(user, new_email):
         recipient_list=[new_email],
     )
 
-def send_verification_email(user):
+def send_verification_email(user, email=None):
     """Send standard verification email"""
+    email_to_verify = email or user.email
     uid = urlsafe_base64_encode(force_bytes(user.id))
     token = default_token_generator.make_token(user)
-    
-    verification_link = f"{settings.FRONTEND_URL}/verify-email/{uid}/{token}/"
-    
+
+    # ✅ Use backend URL, not frontend
+    verification_link = f"https://react-django-ecommerce-cy9p.onrender.com/verify-email/{uid}/{token}/"
+
     send_mail(
         subject="Verify Your Email Address",
         message=f"""
         Hi {user.username},
-        
+
         Please verify your email address by clicking the link below:
         {verification_link}
-        
+
         Thank you,
         Your App Team
         """,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
+        recipient_list=[email_to_verify],
     )
 
 import stripe

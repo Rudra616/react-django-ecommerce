@@ -18,9 +18,6 @@ from decouple import config, Csv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 import os
-
-MEDIA_URL = "/media/"
-MEDIA_ROOT = "/opt/render/project/src/media"
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 

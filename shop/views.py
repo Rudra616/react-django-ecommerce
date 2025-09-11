@@ -677,24 +677,161 @@ class PaymentConfirmView(APIView):
                 
         except Payment.DoesNotExist:
             return Response({"error": "Payment not found"}, status=404)
+# # In views.py - update the stripe_webhook function
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
 @csrf_exempt
 def stripe_webhook(request):
-    if request.method != "POST":
-        return HttpResponse(status=400)  # reject GET requests
-
+    """
+    Handle Stripe webhook events for payment processing
+    """
+    if request.method != 'POST':
+        logger.warning(f"Webhook received {request.method} request, expected POST")
+        return HttpResponse('Method not allowed', status=405)
+    
+    # Get the webhook secret from settings
+    webhook_secret = settings.STRIPE_WEBHOOK_SECRET
+    
+    if not webhook_secret:
+        logger.error("STRIPE_WEBHOOK_SECRET is not configured")
+        return HttpResponse('Webhook secret not configured', status=500)
+    
+    # Get the signature and payload
     payload = request.body
-    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE", "")
-
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
+    
+    if not sig_header:
+        logger.error("Missing Stripe signature header")
+        return HttpResponse('Missing signature header', status=400)
+    
+    logger.info(f"Webhook received with signature: {sig_header}")
+    
     try:
+        # Verify the webhook signature
         event = stripe.Webhook.construct_event(
-            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+            payload, sig_header, webhook_secret
         )
+        logger.info(f"Webhook verified successfully: {event['type']}")
+        
     except ValueError as e:
-        print("Invalid payload:", e)
-        return HttpResponse(status=400)
+        # Invalid payload
+        logger.error(f"Invalid payload: {e}")
+        return HttpResponse('Invalid payload', status=400)
     except stripe.error.SignatureVerificationError as e:
-        print("Invalid signature:", e)
-        return HttpResponse(status=400)
+        # Invalid signature
+        logger.error(f"Invalid signature: {e}")
+        return HttpResponse('Invalid signature', status=400)
+    except Exception as e:
+        logger.error(f"Webhook processing error: {e}")
+        return HttpResponse('Webhook error', status=400)
+    
+    # Handle the event based on its type
+    try:
+        event_type = event['type']
+        logger.info(f"Processing event: {event_type}")
+        
+        if event_type == 'payment_intent.succeeded':
+            payment_intent = event['data']['object']
+            logger.info(f"Payment succeeded: {payment_intent['id']}")
+            handle_payment_succeeded(payment_intent)
+            
+        elif event_type == 'payment_intent.payment_failed':
+            payment_intent = event['data']['object']
+            logger.info(f"Payment failed: {payment_intent['id']}")
+            handle_payment_failed(payment_intent)
+            
+        elif event_type == 'payment_intent.created':
+            payment_intent = event['data']['object']
+            logger.info(f"Payment intent created: {payment_intent['id']}")
+            
+        else:
+            logger.info(f"Unhandled event type: {event_type}")
+            
+        return HttpResponse(status=200)
+        
+    except Exception as e:
+        logger.error(f"Error processing event: {e}")
+        return HttpResponse('Event processing error', status=500)
 
-    print("Stripe Event received:", event["type"])
-    return HttpResponse(status=200)
+
+
+@csrf_exempt
+def webhook_debug(request):
+    """Debug endpoint to check webhook configuration"""
+    if request.method == 'GET':
+        response_data = {
+            'webhook_configured': bool(settings.STRIPE_WEBHOOK_SECRET),
+            'stripe_secret_configured': bool(settings.STRIPE_SECRET_KEY),
+            'stripe_public_configured': bool(settings.STRIPE_PUBLISHABLE_KEY),
+            'endpoint_url': request.build_absolute_uri(),
+        }
+        return JsonResponse(response_data)
+    
+    elif request.method == 'POST':
+        # Simulate a webhook for testing
+        test_payload = {
+            'id': 'test_webhook_id',
+            'type': 'payment_intent.succeeded',
+            'data': {
+                'object': {
+                    'id': 'test_pi_123',
+                    'amount': 2000,
+                    'currency': 'usd',
+                    'metadata': {'order_id': '1'}
+                }
+            }
+        }
+        
+        # Log the test webhook
+        logger.info(f"Test webhook received: {json.dumps(test_payload)}")
+        
+        return JsonResponse({'status': 'test_webhook_received', 'data': test_payload})
+    
+    return HttpResponse('Method not allowed', status=405)
+
+# Add these helper functions for webhook handling if missing
+def handle_payment_succeeded(payment_intent):
+    """Handle successful payment"""
+    try:
+        payment = Payment.objects.get(transaction_id=payment_intent['id'])
+        payment.status = 'completed'
+        payment.paid_at = timezone.now()
+        payment.save()
+        
+        # Update order status
+        payment.order.status = 'processing'
+        payment.order.save()
+        
+        logger.info(f"Payment {payment_intent['id']} marked as completed")
+        
+    except Payment.DoesNotExist:
+        logger.error(f"Payment not found: {payment_intent['id']}")
+        # You might want to create a payment record if it doesn't exist
+        try:
+            order_id = payment_intent['metadata'].get('order_id')
+            if order_id:
+                order = Order.objects.get(id=order_id)
+                Payment.objects.create(
+                    order=order,
+                    amount=payment_intent['amount'] / 100,  # Convert from cents
+                    payment_method='card',
+                    status='completed',
+                    transaction_id=payment_intent['id'],
+                    paid_at=timezone.now()
+                )
+                logger.info(f"Created new payment record for {payment_intent['id']}")
+        except Exception as e:
+            logger.error(f"Error creating payment record: {e}")
+
+def handle_payment_failed(payment_intent):
+    """Handle failed payment"""
+    try:
+        payment = Payment.objects.get(transaction_id=payment_intent['id'])
+        payment.status = 'failed'
+        payment.save()
+        logger.info(f"Payment {payment_intent['id']} marked as failed")
+    except Payment.DoesNotExist:
+        logger.error(f"Payment not found for failed payment: {payment_intent['id']}")

@@ -1,6 +1,7 @@
 # shop/urls.py
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
+from . import views
 
 from .views import (
     # User Auth
@@ -18,7 +19,7 @@ from .views import (
     CartListCreateView, CartDetailView,
 
     # Payments
-    PaymentCreateView,PaymentListView,PaymentConfirmView,stripe_webhook,
+    PaymentCreateView,PaymentListView,PaymentConfirmView,
 
     # Reviews
     ReviewListCreateView, ReviewDetailView,
@@ -56,11 +57,15 @@ urlpatterns = [
     path("cart/<int:pk>/", CartDetailView.as_view(), name="cart-detail"),
 
     # ------------------ PAYMENTS ------------------
-    path("payments/", PaymentCreateView.as_view(), name="payment-create"),
-    path("payments/list/", PaymentListView.as_view(), name="payment-list"),  # Add this
-    # Add these to your urlpatterns in urls.py
-    path("payments/confirm/", PaymentConfirmView.as_view(), name="payment-confirm"),
-    path('payments/webhook/', stripe_webhook, name='stripe-webhook'),
+
+
+    path('payments/', views.PaymentCreateView.as_view(), name='payment-create'),
+    path('payments/list/', views.PaymentListView.as_view(), name='payment-list'),
+    path('payments/confirm/', views.PaymentConfirmView.as_view(), name='payment-confirm'),
+    path('payments/webhook/', views.stripe_webhook, name='stripe-webhook'),
+    path('payments/webhook-debug/', views.webhook_debug, name='webhook-debug'),
+    
+
 
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 

@@ -60,7 +60,7 @@ urlpatterns = [
     path("payments/list/", PaymentListView.as_view(), name="payment-list"),  # Add this
     # Add these to your urlpatterns in urls.py
     path("payments/confirm/", PaymentConfirmView.as_view(), name="payment-confirm"),
-    path("stripe/webhook/", stripe_webhook, name="stripe-webhook"),
+    path('payments/webhook/', stripe_webhook, name='stripe-webhook'),
 
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 

@@ -48,83 +48,52 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
         setShowPaymentOptions(true);
     };
 
-    // const handleCheckout = async () => {
-    //     if (!selectedPaymentMethod) {
-    //         setCheckoutError("Please select a payment method");
-    //         return;
-    //     }
-
-    //     setIsCheckingOut(true);
-    //     setCheckoutError("");
-
-    //     try {
-    //         // 1. Create order from cart items
-    //         const orderResult = await createOrder(items);
-
-    //         console.log("Order result:", orderResult);
-
-    //         if (orderResult.success) {
-    //             // 2. Create payment for the order
-    //             const paymentResult = await createPayment(orderResult.data.id, selectedPaymentMethod);
-
-    //             console.log("Payment result:", paymentResult);
-
-    //             if (paymentResult.success) {
-    //                 // 3. Order and payment created successfully
-    //                 if (onOrderCreated) {
-    //                     onOrderCreated(orderResult.data);
-    //                 }
-
-    //                 // Show success message
-    //                 alert(`Order #${orderResult.data.id} placed successfully with ${selectedPaymentMethod.toUpperCase()} payment!`);
-
-    //                 // Clear cart and go back to home
-    //                 onBack();
-    //             } else {
-    //                 setCheckoutError(paymentResult.error || "Payment failed. Please try again.");
-    //             }
-    //         } else {
-    //             setCheckoutError(orderResult.error || "Failed to create order. Please try again.");
-    //         }
-    //     } catch (error) {
-    //         console.error("Checkout error:", error);
-    //         setCheckoutError("An unexpected error occurred. Please try again.");
-    //     } finally {
-    //         setIsCheckingOut(false);
-    //     }
-    // };
-
-
-    // In Cart.jsx - Simplify checkout process
     const handleCheckout = async () => {
-        try {
-            setLoading(true);
+        if (!selectedPaymentMethod) {
+            setCheckoutError("Please select a payment method");
+            return;
+        }
 
-            // Create order first
+        setIsCheckingOut(true);
+        setCheckoutError("");
+
+        try {
+            // 1. Create order from cart items
             const orderResult = await createOrder(items);
+
             console.log("Order result:", orderResult);
 
-            if (!orderResult.success) {
-                alert(`Order creation failed: ${orderResult.error}`);
-                return;
+            if (orderResult.success) {
+                // 2. Create payment for the order
+                const paymentResult = await createPayment(orderResult.data.id, selectedPaymentMethod);
+
+                console.log("Payment result:", paymentResult);
+
+                if (paymentResult.success) {
+                    // 3. Order and payment created successfully
+                    if (onOrderCreated) {
+                        onOrderCreated(orderResult.data);
+                    }
+
+                    // Show success message
+                    alert(`Order #${orderResult.data.id} placed successfully with ${selectedPaymentMethod.toUpperCase()} payment!`);
+
+                    // Clear cart and go back to home
+                    onBack();
+                } else {
+                    setCheckoutError(paymentResult.error || "Payment failed. Please try again.");
+                }
+            } else {
+                setCheckoutError(orderResult.error || "Failed to create order. Please try again.");
             }
-
-            const orderId = orderResult.data.id;
-
-            // Create payment (optional - you might not need this for COD)
-            // const paymentResult = await createPayment(orderId, 'cod');
-            // console.log("Payment result:", paymentResult);
-
-            // Call the order created callback with the order data
-            onOrderCreated(orderResult.data);
-
         } catch (error) {
             console.error("Checkout error:", error);
-            alert("Checkout failed. Please try again.");
+            setCheckoutError("An unexpected error occurred. Please try again.");
         } finally {
-            setLoading(false);
+            setIsCheckingOut(false);
         }
     };
+
     const calculateTotals = () => {
         const subtotal = items.reduce((sum, item) => sum + (Number(item.product?.price || 0) * item.quantity), 0);
         const shipping = subtotal > 500 ? 0 : 50;

@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { createOrder, createPayment } from "../apis";
 import { useAuth } from "../context/AuthContext";
-
+import Checkout from "./Checkout";
 const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated }) => {
     const [updatingItems, setUpdatingItems] = useState({});
     const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -10,6 +10,7 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
     const [showPaymentOptions, setShowPaymentOptions] = useState(false);
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
     const { isLoggedIn } = useAuth();
+    const [showCheckout, setShowCheckout] = useState(false);
 
     const paymentMethods = [
         { id: 'cod', name: 'Cash on Delivery', icon: '💰' },
@@ -48,51 +49,25 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
         setShowPaymentOptions(true);
     };
 
-    const handleCheckout = async () => {
-        if (!selectedPaymentMethod) {
-            setCheckoutError("Please select a payment method");
-            return;
-        }
-
-        setIsCheckingOut(true);
-        setCheckoutError("");
-
-        try {
-            // 1. Create order from cart items
-            const orderResult = await createOrder(items);
-
-            console.log("Order result:", orderResult);
-
-            if (orderResult.success) {
-                // 2. Create payment for the order
-                const paymentResult = await createPayment(orderResult.data.id, selectedPaymentMethod);
-
-                console.log("Payment result:", paymentResult);
-
-                if (paymentResult.success) {
-                    // 3. Order and payment created successfully
-                    if (onOrderCreated) {
-                        onOrderCreated(orderResult.data);
-                    }
-
-                    // Show success message
-                    alert(`Order #${orderResult.data.id} placed successfully with ${selectedPaymentMethod.toUpperCase()} payment!`);
-
-                    // Clear cart and go back to home
-                    onBack();
-                } else {
-                    setCheckoutError(paymentResult.error || "Payment failed. Please try again.");
-                }
-            } else {
-                setCheckoutError(orderResult.error || "Failed to create order. Please try again.");
-            }
-        } catch (error) {
-            console.error("Checkout error:", error);
-            setCheckoutError("An unexpected error occurred. Please try again.");
-        } finally {
-            setIsCheckingOut(false);
-        }
+    const handleCheckout = () => {
+        setShowCheckout(true);
     };
+
+    const handleOrderCreated = (orderData) => {
+        setShowCheckout(false);
+        onOrderCreated(orderData);
+    };
+
+    if (showCheckout) {
+        return (
+            <Checkout
+                cartItems={items}
+                onOrderCreated={handleOrderCreated}
+                onBack={() => setShowCheckout(false)}
+            />
+        );
+    }
+
 
     const calculateTotals = () => {
         const subtotal = items.reduce((sum, item) => sum + (Number(item.product?.price || 0) * item.quantity), 0);

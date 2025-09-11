@@ -1144,86 +1144,34 @@ export const getOrderDetail = async (orderId) => {
 // Update createOrder function in apis.js
 export const createOrder = async (items) => {
   try {
-    console.log("Creating order with items:", items);
-    
-    // Debug: Check the product structure in each item
-    items.forEach((item, index) => {
-      console.log(`Item ${index} product structure:`, {
-        has_product: !!item.product,
-        product_type: typeof item.product,
-        product_id: item.product?.id,
-        product_object: item.product
-      });
-    });
+        const response = await fetch(`${API_BASE}orders/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            },
+            body: JSON.stringify({
+                items: cartItems.map(item => ({
+                    product: item.product.id,
+                    quantity: item.quantity,
+                    price: item.product.price
+                }))
+            })
+        });
 
-    // Create the order data with proper product IDs
-    const orderData = {
-      items: items.map(item => {
-        // Extract the product ID from the product object
-        const productId = item.product?.id;
-        
-        if (!productId) {
-          console.error("No product ID found in item:", item);
-          throw new Error("Product ID is missing in cart item");
-        }
-        
+        const data = await response.json();
         return {
-          product: productId,  // Send just the ID, not the object
-          quantity: item.quantity
+            success: response.ok,
+            data: response.ok ? data : null,
+            error: response.ok ? null : data.error || 'Failed to create order'
         };
-      })
-    };
-    
-    console.log("Order data being sent:", JSON.stringify(orderData, null, 2));
-    
-    // Get the access token
-    const accessToken = await getValidToken();
-    if (!accessToken) {
-      throw new Error("Authentication required. Please login.");
+    } catch (error) {
+        return {
+            success: false,
+            data: null,
+            error: error.message
+        };
     }
-    
-    // Make the request with proper headers
-    const res = await fetch(`${API_BASE}orders/`, {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify(orderData),
-    });
-    
-    console.log("Order creation response status:", res.status);
-    
-    const responseText = await res.text();
-    console.log("Raw response:", responseText);
-    
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      console.error("Failed to parse response as JSON:", e);
-      data = { detail: responseText };
-    }
-    
-    if (!res.ok) {
-      console.error("Order creation failed:", data);
-      return { 
-        success: false, 
-        data, 
-        status: res.status,
-        error: data.detail || data.error || "Failed to create order" 
-      };
-    }
-    
-    return { success: true, data, status: res.status };
-  } catch (err) {
-    console.error("Order creation error:", err);
-    return { 
-      success: false, 
-      error: err.message,
-      status: err.response?.status 
-    };
-  }
 };
 /**
  * Get payment details for an order
@@ -1258,21 +1206,35 @@ export const getPaymentDetails = async (orderId) => {
  * @param {string} paymentMethod - Payment method (e.g., 'card', 'upi', 'cod')
  * @returns {Promise<Object>} - Operation result
  */
-export const createPayment = async (orderId, paymentMethod = 'cod') => {
-  try {
-    const res = await authFetch(`${API_BASE}payments/`, {
-      method: "POST",
-      body: JSON.stringify({
-        order: orderId,
-        payment_method: paymentMethod
-      }),
-    });
-    
-    const data = await res.json();
-    return { success: res.ok, data };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+
+export const createPayment = async (orderId, paymentMethod) => {
+    try {
+        const response = await fetch(`${API_BASE}payments/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            },
+            body: JSON.stringify({
+                order: orderId,
+                payment_method: paymentMethod,
+                amount: 0 // Will be calculated on backend
+            })
+        });
+
+        const data = await response.json();
+        return {
+            success: response.ok,
+            data: response.ok ? data : null,
+            error: response.ok ? null : data.error || 'Failed to create payment'
+        };
+    } catch (error) {
+        return {
+            success: false,
+            data: null,
+            error: error.message
+        };
+    }
 };
 
 

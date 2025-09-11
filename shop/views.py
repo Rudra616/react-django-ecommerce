@@ -557,77 +557,99 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 
 # Update the PaymentCreateView to handle different payment methods
+# views.py - Update PaymentCreateView with better error handling
 class PaymentCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = PaymentSerializer
 
     def create(self, request, *args, **kwargs):
-        order_id = request.data.get('order')
-        payment_method = request.data.get('payment_method', 'card')
-
-        if not order_id:
-            return Response({"order": "This field is required."}, status=400)
-
         try:
-            order = Order.objects.get(id=order_id, user=request.user)
-        except Order.DoesNotExist:
-            return Response({"order": "Order not found or does not belong to you."}, status=404)
+            order_id = request.data.get('order')
+            payment_method = request.data.get('payment_method', 'card')
 
-        # Handle different payment methods
-        if payment_method == 'card':
-            # 💳 Create Stripe PaymentIntent for card payments
-            try:
-                intent = stripe.PaymentIntent.create(
-                    amount=int(order.total_price * 100),  # cents
-                    currency=settings.STRIPE_CURRENCY,
-                    payment_method_types=['card'],
-                    metadata={
-                        "order_id": order.id, 
-                        "user_id": request.user.id,
-                        "user_email": request.user.email
-                    },
+            if not order_id:
+                return Response(
+                    {"error": "Order ID is required."}, 
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-            except stripe.error.StripeError as e:
-                return Response({"error": str(e)}, status=400)
 
-            payment = Payment.objects.create(
-                order=order,
-                amount=order.total_price,
-                payment_method=payment_method,
-                status='pending',
-                transaction_id=intent["id"],
-            )
+            try:
+                order = Order.objects.get(id=order_id, user=request.user)
+            except Order.DoesNotExist:
+                return Response(
+                    {"error": "Order not found or does not belong to you."}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
-            return Response({
-                "payment_id": payment.id,
-                "order_id": order.id,
-                "amount": str(order.total_price),
-                "status": payment.status,
-                "client_secret": intent.client_secret,
-                "publishable_key": settings.STRIPE_PUBLISHABLE_KEY
-            }, status=201)
-        
-        elif payment_method == 'cod':
-            # Handle Cash on Delivery
-            payment = Payment.objects.create(
-                order=order,
-                amount=order.total_price,
-                payment_method=payment_method,
-                status='pending',  # Will be marked as completed when order is delivered
-                transaction_id=f"COD-{order.id}-{timezone.now().timestamp()}"
-            )
+            # Handle different payment methods
+            if payment_method == 'card':
+                try:
+                    # Convert to cents for Stripe
+                    amount_cents = int(float(order.total_price) * 100)
+                    
+                    intent = stripe.PaymentIntent.create(
+                        amount=amount_cents,
+                        currency=settings.STRIPE_CURRENCY.lower(),  # Ensure lowercase
+                        payment_method_types=['card'],
+                        metadata={
+                            "order_id": order.id, 
+                            "user_id": request.user.id,
+                            "user_email": request.user.email
+                        },
+                    )
+                except stripe.error.StripeError as e:
+                    logger.error(f"Stripe error: {str(e)}")
+                    return Response(
+                        {"error": f"Payment processing error: {str(e)}"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                payment = Payment.objects.create(
+                    order=order,
+                    amount=order.total_price,
+                    payment_method=payment_method,
+                    status='pending',
+                    transaction_id=intent.id,
+                )
+
+                return Response({
+                    "payment_id": payment.id,
+                    "order_id": order.id,
+                    "amount": str(order.total_price),
+                    "status": payment.status,
+                    "client_secret": intent.client_secret,
+                    "publishable_key": settings.STRIPE_PUBLISHABLE_KEY
+                }, status=status.HTTP_201_CREATED)
             
-            # For COD, we can mark the payment as pending but order can proceed
-            return Response({
-                "payment_id": payment.id,
-                "order_id": order.id,
-                "amount": str(order.total_price),
-                "status": payment.status,
-                "message": "Cash on Delivery order placed successfully"
-            }, status=201)
-        
-        else:
-            return Response({"error": "Unsupported payment method"}, status=400)
+            elif payment_method == 'cod':
+                payment = Payment.objects.create(
+                    order=order,
+                    amount=order.total_price,
+                    payment_method=payment_method,
+                    status='pending',
+                    transaction_id=f"COD-{order.id}-{timezone.now().timestamp()}"
+                )
+                
+                return Response({
+                    "payment_id": payment.id,
+                    "order_id": order.id,
+                    "amount": str(order.total_price),
+                    "status": payment.status,
+                    "message": "Cash on Delivery order placed successfully"
+                }, status=status.HTTP_201_CREATED)
+            
+            else:
+                return Response(
+                    {"error": "Unsupported payment method"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            logger.error(f"Payment creation error: {str(e)}")
+            return Response(
+                {"error": "Internal server error"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # Add a view to confirm payment completion
 class PaymentConfirmView(APIView):
@@ -835,3 +857,17 @@ def handle_payment_failed(payment_intent):
         logger.info(f"Payment {payment_intent['id']} marked as failed")
     except Payment.DoesNotExist:
         logger.error(f"Payment not found for failed payment: {payment_intent['id']}")
+
+
+# views.py - Add debug endpoint
+class StripeConfigView(APIView):
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request):
+        config = {
+            'stripe_configured': bool(settings.STRIPE_SECRET_KEY),
+            'stripe_public_configured': bool(settings.STRIPE_PUBLISHABLE_KEY),
+            'stripe_currency': settings.STRIPE_CURRENCY,
+            'webhook_configured': bool(settings.STRIPE_WEBHOOK_SECRET),
+        }
+        return Response(config)

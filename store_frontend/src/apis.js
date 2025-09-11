@@ -1207,32 +1207,54 @@ export const getPaymentDetails = async (orderId) => {
  * @returns {Promise<Object>} - Operation result
  */
 
-export const createPayment = async (orderId, paymentMethod) => {
+// apis.js - Fix createPayment function
+export const createPayment = async (orderId, paymentMethod = 'cod') => {
     try {
-        const response = await fetch(`${API_BASE}payments/`, {
-            method: 'POST',
+        const accessToken = await getValidToken();
+        if (!accessToken) {
+            throw new Error("Authentication required");
+        }
+
+        const res = await fetch(`${API_BASE}payments/`, {
+            method: "POST",
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${accessToken}`
             },
             body: JSON.stringify({
                 order: orderId,
-                payment_method: paymentMethod,
-                amount: 0 // Will be calculated on backend
-            })
+                payment_method: paymentMethod
+            }),
         });
 
-        const data = await response.json();
-        return {
-            success: response.ok,
-            data: response.ok ? data : null,
-            error: response.ok ? null : data.error || 'Failed to create payment'
-        };
-    } catch (error) {
-        return {
-            success: false,
-            data: null,
-            error: error.message
+        // Check if response is JSON
+        const contentType = res.headers.get("content-type");
+        let data;
+        
+        if (contentType && contentType.includes("application/json")) {
+            data = await res.json();
+        } else {
+            // Handle HTML response (error page)
+            const text = await res.text();
+            console.error("Non-JSON response:", text.substring(0, 200));
+            throw new Error(`Server returned HTML instead of JSON. Status: ${res.status}`);
+        }
+
+        if (!res.ok) {
+            return { 
+                success: false, 
+                error: data.error || data.detail || `HTTP error ${res.status}`,
+                status: res.status
+            };
+        }
+
+        return { success: true, data };
+    } catch (err) {
+        console.error("Payment creation error:", err);
+        return { 
+            success: false, 
+            error: err.message || "Network error",
+            status: err.response?.status 
         };
     }
 };

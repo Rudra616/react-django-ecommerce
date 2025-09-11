@@ -677,46 +677,24 @@ class PaymentConfirmView(APIView):
                 
         except Payment.DoesNotExist:
             return Response({"error": "Payment not found"}, status=404)
-
 @csrf_exempt
 def stripe_webhook(request):
-    import logging
-    logger = logging.getLogger(__name__)
+    if request.method != "POST":
+        return HttpResponse(status=400)  # reject GET requests
 
     payload = request.body
     sig_header = request.META.get("HTTP_STRIPE_SIGNATURE", "")
-    logger.info(f"Webhook received: {payload[:100]}...")  # log first 100 chars
-    logger.info(f"Stripe Signature header: {sig_header}")
 
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
         )
     except ValueError as e:
-        logger.error(f"Invalid payload: {e}")
+        print("Invalid payload:", e)
         return HttpResponse(status=400)
     except stripe.error.SignatureVerificationError as e:
-        logger.error(f"Invalid signature: {e}")
+        print("Invalid signature:", e)
         return HttpResponse(status=400)
 
-    logger.info(f"Stripe event type: {event['type']}")
-
-    if event["type"] == "payment_intent.succeeded":
-        intent = event["data"]["object"]
-        payment = Payment.objects.filter(transaction_id=intent["id"]).first()
-        if payment:
-            payment.status = "completed"
-            payment.paid_at = timezone.now()
-            payment.save()
-            payment.order.status = "processing"
-            payment.order.save()
-    elif event["type"] == "payment_intent.payment_failed":
-        intent = event["data"]["object"]
-        payment = Payment.objects.filter(transaction_id=intent["id"]).first()
-        if payment:
-            payment.status = "failed"
-            payment.order.status = "cancelled"
-            payment.order.save()
-            payment.save()
-
+    print("Stripe Event received:", event["type"])
     return HttpResponse(status=200)

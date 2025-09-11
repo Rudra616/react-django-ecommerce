@@ -1142,36 +1142,58 @@ export const getOrderDetail = async (orderId) => {
 
 // Update createOrder function in apis.js
 // Update createOrder function in apis.js
-export const createOrder = async (items) => {
+// Fix the createOrder function in apis.js
+// apis.js - Fix createOrder function
+export const createOrder = async (cartItems) => {
   try {
-        const response = await fetch(`${API_BASE}orders/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-            },
-            body: JSON.stringify({
-                items: cartItems.map(item => ({
-                    product: item.product.id,
-                    quantity: item.quantity,
-                    price: item.product.price
-                }))
-            })
-        });
-
-        const data = await response.json();
-        return {
-            success: response.ok,
-            data: response.ok ? data : null,
-            error: response.ok ? null : data.error || 'Failed to create order'
-        };
-    } catch (error) {
-        return {
-            success: false,
-            data: null,
-            error: error.message
-        };
+    const accessToken = await getValidToken();
+    if (!accessToken) {
+      throw new Error("Authentication required");
     }
+
+    // Format items correctly for the backend
+    const orderData = {
+      items: cartItems.map(item => ({
+        product: item.product.id, // Just the product ID
+        quantity: item.quantity
+        // Don't include price - backend will get it from product
+      }))
+    };
+
+    console.log("Sending order data:", orderData);
+
+    const response = await fetch(`${API_BASE}orders/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify(orderData)
+    });
+
+    const data = await response.json();
+    console.log("Order creation response:", data);
+
+    if (response.ok) {
+      return {
+        success: true,
+        data: data,
+        orderId: data.id
+      };
+    } else {
+      return {
+        success: false,
+        error: data.error || data.detail || 'Failed to create order',
+        status: response.status
+      };
+    }
+  } catch (error) {
+    console.error("Order creation error:", error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 };
 /**
  * Get payment details for an order
@@ -1208,57 +1230,50 @@ export const getPaymentDetails = async (orderId) => {
  */
 
 // apis.js - Fix createPayment function
+// apis.js - Fix createPayment function
 export const createPayment = async (orderId, paymentMethod = 'cod') => {
-    try {
-        const accessToken = await getValidToken();
-        if (!accessToken) {
-            throw new Error("Authentication required");
-        }
-
-        const res = await fetch(`${API_BASE}payments/`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${accessToken}`
-            },
-            body: JSON.stringify({
-                order: orderId,
-                payment_method: paymentMethod
-            }),
-        });
-
-        // Check if response is JSON
-        const contentType = res.headers.get("content-type");
-        let data;
-        
-        if (contentType && contentType.includes("application/json")) {
-            data = await res.json();
-        } else {
-            // Handle HTML response (error page)
-            const text = await res.text();
-            console.error("Non-JSON response:", text.substring(0, 200));
-            throw new Error(`Server returned HTML instead of JSON. Status: ${res.status}`);
-        }
-
-        if (!res.ok) {
-            return { 
-                success: false, 
-                error: data.error || data.detail || `HTTP error ${res.status}`,
-                status: res.status
-            };
-        }
-
-        return { success: true, data };
-    } catch (err) {
-        console.error("Payment creation error:", err);
-        return { 
-            success: false, 
-            error: err.message || "Network error",
-            status: err.response?.status 
-        };
+  try {
+    const accessToken = await getValidToken();
+    if (!accessToken) {
+      throw new Error("Authentication required");
     }
-};
 
+    const paymentData = {
+      order: orderId,
+      payment_method: paymentMethod
+    };
+
+    console.log("Sending payment data:", paymentData);
+
+    const res = await fetch(`${API_BASE}payments/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`
+      },
+      body: JSON.stringify(paymentData),
+    });
+
+    const data = await res.json();
+    console.log("Payment creation response:", data);
+
+    if (res.ok) {
+      return { success: true, data };
+    } else {
+      return { 
+        success: false, 
+        error: data.error || data.detail || `HTTP error ${res.status}`,
+        status: res.status
+      };
+    }
+  } catch (err) {
+    console.error("Payment creation error:", err);
+    return { 
+      success: false, 
+      error: err.message || "Network error"
+    };
+  }
+};
 
 /**
  * Update order status
@@ -1360,28 +1375,30 @@ const debugRequest = async (url, options) => {
 // });
 
 // Add this debug function
-export const debugOrderCreation = async () => {
+// apis.js - Add debug function
+export const debugOrderCreation = async (testData) => {
   try {
-    // Test with a simple known product ID
-    const testData = {
-      items: [
-        {
-          product: 15,  // Use a product ID that exists in your database
-          quantity: 1
-        }
-      ]
-    };
+    const accessToken = await getValidToken();
     
-    console.log("Testing order creation with:", testData);
-    
-    const res = await authFetch(`${API_BASE}orders/`, {
-      method: "POST",
-      body: JSON.stringify(testData),
+    const response = await fetch(`${API_BASE}orders/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify(testData || {
+        items: [
+          {
+            product: 1,  // Use a known product ID
+            quantity: 1
+          }
+        ]
+      })
     });
-    
-    const responseText = await res.text();
-    console.log("Test response status:", res.status);
-    console.log("Test response text:", responseText);
+
+    const responseText = await response.text();
+    console.log("Debug response status:", response.status);
+    console.log("Debug response text:", responseText);
     
     let data;
     try {
@@ -1390,12 +1407,12 @@ export const debugOrderCreation = async () => {
       data = { raw: responseText };
     }
     
-    return { success: res.ok, data, status: res.status };
+    return { success: response.ok, data, status: response.status };
   } catch (err) {
     console.error("Debug test error:", err);
     return { success: false, error: err.message };
   }
 };
-
 // Call this function to test if the endpoint works
 // debugOrderCreation();
+

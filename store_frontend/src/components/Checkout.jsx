@@ -1,4 +1,3 @@
-// components/Checkout.jsx
 import React, { useState } from 'react';
 import { createOrder, createPayment } from '../apis';
 import ShippingAddressForm from './ShippingAddressForm';
@@ -28,23 +27,35 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
         setError('');
 
         try {
-            // Create order
-            const orderResult = await createOrder(cartItems);
+            console.log("Creating COD order with items:", cartItems);
+
+            const orderItems = cartItems.map(item => {
+                const productObject = item.product || {};
+                const productId = productObject.id || item.product_id;
+
+                if (!productId) {
+                    throw new Error("Product ID not found in cart item.");
+                }
+
+                return {
+                    product: productId,
+                    quantity: item.quantity
+                };
+            });
+
+            console.log("Sending order data:", { items: orderItems });
+
+            const orderResult = await createOrder(orderItems);
 
             if (!orderResult.success) {
                 throw new Error(orderResult.error || 'Failed to create order');
             }
 
-            // Create COD payment
-            const paymentResult = await createPayment(orderResult.data.id, 'cod');
-
-            if (!paymentResult.success) {
-                throw new Error(paymentResult.error || 'Failed to create payment');
-            }
-
             onOrderCreated(orderResult.data);
+
         } catch (err) {
             setError(err.message);
+            console.error("COD payment error:", err);
         } finally {
             setLoading(false);
         }
@@ -122,7 +133,7 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
                             {paymentMethod === 'card' ? (
                                 <StripePaymentForm
                                     order={{
-                                        id: 'pending', // Will be created after payment
+                                        id: 'pending',
                                         total_price: total,
                                         shipping_full_name: shippingAddress.full_name,
                                         shipping_phone: shippingAddress.phone_number,
@@ -130,7 +141,8 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
                                         shipping_district: shippingAddress.district,
                                         shipping_state: shippingAddress.state,
                                         shipping_pin_code: shippingAddress.pin_code,
-                                        user_email: user.email
+                                        user_email: user.email,
+                                        items: cartItems
                                     }}
                                     onPaymentSuccess={handleStripePaymentSuccess}
                                     onPaymentError={handleStripePaymentError}

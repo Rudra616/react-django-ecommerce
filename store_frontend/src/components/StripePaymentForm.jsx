@@ -1,10 +1,11 @@
-// components/StripePaymentForm.jsx
 import React, { useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { createOrder, createPayment } from '../apis';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+
 const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
     const stripe = useStripe();
     const elements = useElements();
@@ -13,7 +14,7 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
     const handleSubmit = async (event) => {
         event.preventDefault();
         setProcessing(true);
-        onPaymentError(''); // Clear previous errors
+        onPaymentError('');
 
         if (!stripe || !elements) {
             onPaymentError('Stripe not loaded');
@@ -22,59 +23,55 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
         }
 
         try {
-            console.log("Creating payment for order:", order);
+            console.log("Creating order for payment");
 
-            // First create the order if it doesn't exist
-            let orderId = order.id;
-            if (orderId === 'pending') {
-                const orderResult = await createOrder([
-                    {
-                        product: order.items[0].product.id,
-                        quantity: order.items[0].quantity,
-                        price: order.items[0].product.price
-                    }
-                ]);
+            const orderItems = order.items.map(item => {
+                const productObject = item.product || {};
+                const productId = productObject.id || item.product_id;
 
-                if (!orderResult.success) {
-                    throw new Error(orderResult.error || 'Failed to create order');
+                if (!productId) {
+                    throw new Error("Product ID not found in cart item.");
                 }
-                orderId = orderResult.data.id;
-            }
 
-            // Create payment
-            const paymentResult = await createPayment(orderId, 'card');
-
-            if (!paymentResult.success) {
-                throw new Error(paymentResult.error || 'Payment creation failed');
-            }
-
-            const { client_secret } = paymentResult.data;
-
-            // Confirm payment with Stripe
-            const result = await stripe.confirmCardPayment(client_secret, {
-                payment_method: {
-                    card: elements.getElement(CardElement),
-                    billing_details: {
-                        name: order.shipping_full_name,
-                        email: order.user_email,
-                        phone: order.shipping_phone,
-                        address: {
-                            line1: order.shipping_address,
-                            city: order.shipping_district,
-                            state: order.shipping_state,
-                            postal_code: order.shipping_pin_code
-                        }
-                    }
-                }
+                return {
+                    product: productId,
+                    quantity: item.quantity
+                };
             });
 
-            if (result.error) {
-                throw new Error(result.error.message);
+            console.log("Sending order data:", { items: orderItems });
+
+            const orderResult = await createOrder(orderItems);
+
+            if (!orderResult.success) {
+                throw new Error(orderResult.error || 'Failed to create order');
             }
 
-            if (result.paymentIntent.status === 'succeeded') {
-                onPaymentSuccess(paymentResult.data);
+            const orderId = orderResult.data.id;
+            const paymentResult = await createPayment(orderId, 'card');
+
+            if (paymentResult.success) {
+                const { client_secret } = paymentResult.data;
+
+                const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(client_secret, {
+                    payment_method: {
+                        card: elements.getElement(CardElement),
+                    },
+                });
+
+                if (stripeError) {
+                    onPaymentError(stripeError.message);
+                } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+                    onPaymentSuccess({
+                        order_id: orderId,
+                        transaction_id: paymentIntent.id,
+                        status: paymentIntent.status
+                    });
+                }
+            } else {
+                throw new Error(paymentResult.error || 'Failed to create payment intent');
             }
+
         } catch (error) {
             console.error("Payment error:", error);
             onPaymentError(error.message);
@@ -82,6 +79,7 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
             setProcessing(false);
         }
     };
+
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div className="border p-4 rounded-lg">

@@ -879,43 +879,7 @@ export const getUserProfile = async () => {
  * @param {Object} userData - Updated user data
  * @returns {Promise<Object>} - Operation result
  */
-export const updateUserProfile = async (userData) => {
-  try {
-    console.log("📤 Updating profile with:", userData);
-    
-    const res = await authFetch(`${API_BASE}user/`, {
-      method: "PUT",
-      body: JSON.stringify(userData),
-    });
-    
-    const data = await res.json();
-    console.log("📥 Profile update response:", data);
-    
-    if (res.ok) {
-      return { 
-        success: true, 
-        data: data.user || data,
-        message: data.message || "Profile updated successfully!" 
-      };
-    } else {
-      // ✅ CORRECTED: Extract the specific error fields from the response
-      console.error("❌ Profile update failed with:", data);
-      
-      return { 
-        success: false, 
-        errors: data.errors || [],
-        fieldErrors: data.fieldErrors || {}
-      };
-    }
-  } catch (error) {
-    console.error("❌ Profile update error:", error);
-    return { 
-      success: false, 
-      errors: ["Network error. Please try again."],
-      fieldErrors: {}
-    };
-  }
-};
+
 
 /**
  * Verify email change

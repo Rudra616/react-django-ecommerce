@@ -16,7 +16,8 @@ const Profile = ({ onBack }) => {
         date_of_birth: "",
         address: "",
         state: "",
-        district: ""
+        district: "",
+        pin_code: ""
     });
     const [passwordData, setPasswordData] = useState({
         current_password: "",
@@ -34,27 +35,8 @@ const Profile = ({ onBack }) => {
         confirm: false
     });
     const { user: authUser, updateUser } = useAuth();
+
     useEffect(() => {
-        const fetchUserProfile = async () => {
-            try {
-                setLoading(true);
-                const result = await getUserProfile();
-                console.log("Profile API response:", result); // Debug log
-
-                if (result.success) {
-                    setUserData(result.user);
-                    console.log("User data set:", result.user); // Debug log
-                } else {
-                    setMessage(result.error || "Failed to load profile");
-                }
-            } catch (error) {
-                console.error("Profile fetch error:", error); // Debug log
-                setMessage("An error occurred while loading profile");
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchUserProfile();
     }, []);
 
@@ -65,17 +47,16 @@ const Profile = ({ onBack }) => {
             console.log("Profile API response:", result);
 
             if (result.success && result.user) {
-                // Safely set user data with defaults for missing fields
                 setUserData(prev => ({
                     ...prev,
-                    ...result.user,
                     username: result.user.username || "",
                     email: result.user.email || "",
                     phone_number: result.user.phone_number || "",
                     date_of_birth: result.user.date_of_birth || "",
                     address: result.user.address || "",
                     state: result.user.state || "",
-                    district: result.user.district || ""
+                    district: result.user.district || "",
+                    pin_code: result.user.pin_code || ""
                 }));
             } else {
                 setMessage(result.error || "Failed to load profile");
@@ -87,10 +68,12 @@ const Profile = ({ onBack }) => {
             setLoading(false);
         }
     };
+
     const handleProfileChange = (e) => {
         const { name, value } = e.target;
         setUserData(prev => ({ ...prev, [name]: value }));
 
+        // Clear error for this field when user starts typing
         if (errors[name]) {
             setErrors(prev => ({ ...prev, [name]: "" }));
         }
@@ -115,7 +98,6 @@ const Profile = ({ onBack }) => {
         setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }));
     };
 
-    // In handleProfileSubmit function, update error handling
     const handleProfileSubmit = async (e) => {
         e.preventDefault();
         setUpdating(true);
@@ -127,23 +109,24 @@ const Profile = ({ onBack }) => {
 
             if (result.success) {
                 setMessage(result.message || "Profile updated successfully!");
-                if (result.user) {
-                    updateUser(result.user);
-                    setUserData(result.user); // Update local state with returned user data
+                if (result.data) {
+                    updateUser(result.data);
+                    setUserData(result.data);
                 }
-                fetchUserProfile(); // Refresh data
+                // Clear errors on success
+                setErrors({});
             } else {
-                if (result.fieldErrors) {
+                if (result.fieldErrors && Object.keys(result.fieldErrors).length > 0) {
                     setErrors(result.fieldErrors);
-                } else if (result.errors) {
-                    // Handle array of error messages
+                } else if (result.errors && result.errors.length > 0) {
                     setMessage(Array.isArray(result.errors) ? result.errors.join(", ") : result.errors);
                 } else {
-                    setMessage("Failed to update profile");
+                    setMessage("Failed to update profile. Please check your input.");
                 }
             }
         } catch (error) {
             setMessage("An unexpected error occurred");
+            console.error("Profile submit error:", error);
         } finally {
             setUpdating(false);
         }
@@ -165,6 +148,8 @@ const Profile = ({ onBack }) => {
                     new_password: "",
                     confirm_password: ""
                 });
+                // Clear errors on success
+                setErrors({});
             } else {
                 if (result.fieldErrors) {
                     setErrors(result.fieldErrors);
@@ -180,6 +165,18 @@ const Profile = ({ onBack }) => {
         }
     };
 
+    // Helper function to display field errors
+    const renderFieldError = (fieldName) => {
+        if (!errors[fieldName]) return null;
+
+        const error = errors[fieldName];
+        if (Array.isArray(error)) {
+            return error.map((err, index) => (
+                <p key={index} className="mt-1 text-sm text-red-600">{err}</p>
+            ));
+        }
+        return <p className="mt-1 text-sm text-red-600">{error}</p>;
+    };
 
     if (loading) {
         return (
@@ -267,9 +264,7 @@ const Profile = ({ onBack }) => {
                                         required
                                     />
                                 </div>
-                                {errors.username && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.username}</p>
-                                )}
+                                {renderFieldError("username")}
                             </div>
 
                             {/* Email */}
@@ -291,9 +286,7 @@ const Profile = ({ onBack }) => {
                                         required
                                     />
                                 </div>
-                                {errors.email && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-                                )}
+                                {renderFieldError("email")}
                                 <p className="mt-1 text-xs text-gray-500">
                                     Changing your email will require verification
                                 </p>
@@ -318,9 +311,7 @@ const Profile = ({ onBack }) => {
                                         required
                                     />
                                 </div>
-                                {errors.phone_number && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.phone_number}</p>
-                                )}
+                                {renderFieldError("phone_number")}
                             </div>
 
                             {/* Date of Birth */}
@@ -342,9 +333,7 @@ const Profile = ({ onBack }) => {
                                         required
                                     />
                                 </div>
-                                {errors.date_of_birth && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.date_of_birth}</p>
-                                )}
+                                {renderFieldError("date_of_birth")}
                             </div>
 
                             {/* Address */}
@@ -366,9 +355,7 @@ const Profile = ({ onBack }) => {
                                         required
                                     />
                                 </div>
-                                {errors.address && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.address}</p>
-                                )}
+                                {renderFieldError("address")}
                             </div>
 
                             {/* State */}
@@ -385,9 +372,7 @@ const Profile = ({ onBack }) => {
                                         }`}
                                     required
                                 />
-                                {errors.state && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.state}</p>
-                                )}
+                                {renderFieldError("state")}
                             </div>
 
                             {/* District */}
@@ -404,9 +389,26 @@ const Profile = ({ onBack }) => {
                                         }`}
                                     required
                                 />
-                                {errors.district && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.district}</p>
-                                )}
+                                {renderFieldError("district")}
+                            </div>
+
+                            {/* PIN Code */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    PIN Code *
+                                </label>
+                                <input
+                                    type="text"
+                                    name="pin_code"
+                                    value={userData.pin_code}
+                                    onChange={handleProfileChange}
+                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 ${errors.pin_code ? "border-red-500" : "border-gray-300"
+                                        }`}
+                                    required
+                                    maxLength="6"
+                                />
+                                {renderFieldError("pin_code")}
+                                <p className="mt-1 text-xs text-gray-500">6-digit PIN code</p>
                             </div>
                         </div>
 
@@ -463,9 +465,7 @@ const Profile = ({ onBack }) => {
                                         {showPasswords.current ? <FaEyeSlash className="text-gray-400" /> : <FaEye className="text-gray-400" />}
                                     </button>
                                 </div>
-                                {errors.current_password && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.current_password}</p>
-                                )}
+                                {renderFieldError("current_password")}
                             </div>
 
                             {/* New Password */}
@@ -494,9 +494,7 @@ const Profile = ({ onBack }) => {
                                         {showPasswords.new ? <FaEyeSlash className="text-gray-400" /> : <FaEye className="text-gray-400" />}
                                     </button>
                                 </div>
-                                {errors.new_password && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.new_password}</p>
-                                )}
+                                {renderFieldError("new_password")}
                                 <p className="mt-1 text-xs text-gray-500">
                                     Password must be at least 8 characters with uppercase, lowercase, number, and special character
                                 </p>
@@ -528,9 +526,7 @@ const Profile = ({ onBack }) => {
                                         {showPasswords.confirm ? <FaEyeSlash className="text-gray-400" /> : <FaEye className="text-gray-400" />}
                                     </button>
                                 </div>
-                                {errors.confirm_password && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.confirm_password}</p>
-                                )}
+                                {renderFieldError("confirm_password")}
                             </div>
                         </div>
 

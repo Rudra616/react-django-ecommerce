@@ -1,6 +1,26 @@
 // components/apis.js
 const API_BASE = import.meta.env.VITE_API_BASE;
 import axios from 'axios';
+
+
+// Add debug logging at the very top
+console.log("Environment variables:", import.meta.env);
+console.log("VITE_API_BASE:", import.meta.env.VITE_API_BASE);
+
+
+// Validate the API_BASE
+if (!API_BASE || API_BASE.includes('ecommerce.local')) {
+  console.error("❌ Invalid API_BASE detected:", API_BASE);
+  // Fallback to your actual backend URL
+  const fallbackAPI = 'http://ecommerce.local/';
+  console.log("✅ Using fallback API:", fallbackAPI);
+  // Reassign the constant (you may need to use let instead of const)
+  // For now, we'll create a new variable
+  window.ACTUAL_API_BASE = fallbackAPI;
+} else {
+  console.log("✅ API_BASE is valid:", API_BASE);
+  window.ACTUAL_API_BASE = API_BASE;
+}
 const api = axios.create({
   baseURL: API_BASE,
 });
@@ -15,6 +35,7 @@ api.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
+
 
 
 api.interceptors.response.use(
@@ -170,12 +191,25 @@ export const refreshAccessToken = async () => {
  * @param {Object} options - Fetch options
  * @returns {Promise<Response>} - Fetch response
  */
+// Update authFetch function
 export const authFetch = async (url, options = {}) => {
   const accessToken = await getValidToken();
   
   if (!accessToken) {
     throw new Error("Authentication required. Please login.");
   }
+
+  // ✅ Use the actual API base (fallback if needed)
+  const actualApiBase = window.ACTUAL_API_BASE || API_BASE || 'https://react-django-ecommerce-cy9p.onrender.com/';
+  
+  // ✅ Ensure the URL is properly constructed
+  let fullUrl = url;
+  if (!url.startsWith('http')) {
+    // Remove any leading slash from the URL and add it to the base
+    fullUrl = `${actualApiBase}${url.replace(/^\//, '')}`;
+  }
+
+  console.log("🌐 Making request to:", fullUrl); // Debug log
 
   // Add authorization header
   const headers = {
@@ -184,7 +218,7 @@ export const authFetch = async (url, options = {}) => {
     Authorization: `Bearer ${accessToken}`,
   };
 
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetch(fullUrl, { ...options, headers });
     
   // If unauthorized, clear tokens and throw error
   if (response.status === 401) {
@@ -194,7 +228,6 @@ export const authFetch = async (url, options = {}) => {
 
   return response;
 };
-
 // -------------------- LOGIN --------------------
 
 /**
@@ -848,40 +881,38 @@ export const getUserProfile = async () => {
  */
 export const updateUserProfile = async (userData) => {
   try {
+    console.log("📤 Updating profile with:", userData);
+    
     const res = await authFetch(`${API_BASE}user/`, {
       method: "PUT",
       body: JSON.stringify(userData),
     });
     
     const data = await res.json();
+    console.log("📥 Profile update response:", data);
     
     if (res.ok) {
       return { 
         success: true, 
-        data,
+        data: data.user || data,
         message: data.message || "Profile updated successfully!" 
       };
     } else {
-      // Handle validation errors
-      const errorMessages = [];
-      for (const [field, errors] of Object.entries(data)) {
-        if (Array.isArray(errors)) {
-          errorMessages.push(...errors.map(error => `${field}: ${error}`));
-        } else if (typeof errors === 'string') {
-          errorMessages.push(errors);
-        }
-      }
+      // ✅ CORRECTED: Extract the specific error fields from the response
+      console.error("❌ Profile update failed with:", data);
       
       return { 
         success: false, 
-        errors: errorMessages.length > 0 ? errorMessages : ["Failed to update profile"],
-        fieldErrors: data
+        errors: data.errors || [],
+        fieldErrors: data.fieldErrors || {}
       };
     }
   } catch (error) {
+    console.error("❌ Profile update error:", error);
     return { 
       success: false, 
-      errors: ["Network error. Please try again."] 
+      errors: ["Network error. Please try again."],
+      fieldErrors: {}
     };
   }
 };

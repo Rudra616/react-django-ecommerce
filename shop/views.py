@@ -191,16 +191,16 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
         new_email = request.data.get('email', '').lower().strip()
         old_email = user.email
         
-        # Remove email from data if it's the same as current
+        # ✅ FIXED: Don't remove email field even if unchanged
         if new_email == old_email:
+            # Use the original data without removing email
             request_data = request.data.copy()
-            request_data.pop('email', None)
             serializer = self.get_serializer(user, data=request_data, partial=partial)
         else:
             serializer = self.get_serializer(user, data=request.data, partial=partial)
         
         if serializer.is_valid():
-            # Save all fields except email first
+            # Save all fields including email
             if new_email == old_email:
                 serializer.save()
                 return Response({
@@ -233,7 +233,10 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
             "success": False,
             "errors": error_messages,
             "fieldErrors": serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+        }, status=status.HTTP_400_BAD_REQUEST)  
+
+
+
 class ChangePasswordView(generics.UpdateAPIView):
     serializer_class = PasswordChangeSerializer
     permission_classes = [IsAuthenticated]

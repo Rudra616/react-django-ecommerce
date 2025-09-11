@@ -27,6 +27,7 @@ import stripe
 STRIPE_SECRET_KEY = config("STRIPE_SECRET_KEY")
 STRIPE_PUBLISHABLE_KEY = config("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET")
+STRIPE_CURRENCY = 'usd'  # ← YOU'RE MISSING THIS ONE
 
 stripe.api_key = STRIPE_SECRET_KEY
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -183,7 +184,7 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),   # Reasonable access time
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=20),   # Reasonable access time
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),     # Refresh lasts 7 days
     "BLACKLIST_AFTER_ROTATION": False,
     "AUTH_HEADER_TYPES": ("Bearer",),

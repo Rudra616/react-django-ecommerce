@@ -1013,24 +1013,27 @@ export const debugPasswordEndpoint = async () => {
 
 
 // Add this to apis.js
+// In apis.js - Update resetPassword function
 export const resetPassword = async (uidb64, token, newPassword) => {
-  try {
-    const res = await fetch(`${API_BASE}password/reset/${uidb64}/${token}/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: newPassword }),
-    });
-    
-    const data = await res.json();
-    
-    if (res.ok) {
-      return { success: true, message: data.message || "Password reset successfully!" };
-    } else {
-      return { success: false, error: data.error || "Failed to reset password" };
+    try {
+        // ✅ Use your BACKEND API URL directly
+        const API_BASE = import.meta.env.VITE_API_BASE; // This should be your backend URL
+        const res = await fetch(`${API_BASE}password/reset/${uidb64}/${token}/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password: newPassword }),
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+            return { success: true, message: data.message || "Password reset successfully!" };
+        } else {
+            return { success: false, error: data.error || "Failed to reset password" };
+        }
+    } catch (err) {
+        return { success: false, error: "Network error. Please try again." };
     }
-  } catch (err) {
-    return { success: false, error: "Network error. Please try again." };
-  }
 };
 
 

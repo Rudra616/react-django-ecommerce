@@ -400,20 +400,23 @@ class CartDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 
+# In views.py - ForgotPasswordView
 class ForgotPasswordView(APIView):
-    permission_classes = [AllowAny]  # ✅ Allow anyone to call this endpoint
+    permission_classes = [AllowAny]
 
     def post(self, request):
         email = request.data.get("email")
         try:
             user = User.objects.filter(email=email).first()
             if not user:
-                return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+                # Don't reveal whether email exists for security
+                return Response({"message": "If the email exists, a reset link has been sent."}, status=200)
     
             # Create reset token
             uid = urlsafe_base64_encode(force_bytes(user.id))
             token = default_token_generator.make_token(user)
     
+            # ✅ Use FRONTEND_URL (single URL) for the reset link
             reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}/"
     
             send_mail(
@@ -423,14 +426,15 @@ class ForgotPasswordView(APIView):
                 recipient_list=[email],
             )
     
-            return Response({"message": "Password reset email sent."}, status=200)
+            return Response({"message": "If the email exists, a reset link has been sent."}, status=200)
     
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
+# In views.py - ResetPasswordView
 class ResetPasswordView(APIView):
     permission_classes = [AllowAny]
+    
     def post(self, request, uidb64, token):
         try:
             # Decode user ID
@@ -452,11 +456,11 @@ class ResetPasswordView(APIView):
 
             return Response({"message": "Password reset successful"}, status=200)
 
-        except Exception:
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             return Response({"error": "Invalid request"}, status=400)
-
-
-# views.py - Update ReviewListCreateView
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+        
 # views.py - Update ReviewListCreateView
 class ReviewListCreateView(generics.ListCreateAPIView):
     serializer_class = ReviewSerializer

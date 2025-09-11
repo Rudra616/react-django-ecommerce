@@ -199,16 +199,17 @@ EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 
 
 
-FRONTEND_URL =config("FRONTEND_URL")  # change in production
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
 
 
 
-CORS_ALLOWED_ORIGINS = [
-   # React dev server
-    config("FRONTEND_URL", default="http://localhost:5173")
-]
+from decouple import config, Csv
 
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = config(
+    "CORS_ALLOWED_ORIGINS",
+    default="http://localhost:5173",
+    cast=Csv()
+)
 
 
 import cloudinary

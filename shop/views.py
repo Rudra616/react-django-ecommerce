@@ -678,47 +678,38 @@ class PaymentConfirmView(APIView):
         except Payment.DoesNotExist:
             return Response({"error": "Payment not found"}, status=404)
 
-# Complete the webhook handler
+
+
 @csrf_exempt
 def stripe_webhook(request):
     payload = request.body
-    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
-    event = None
-
+    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE", "")
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
         )
-    except ValueError as e:
-        # Invalid payload
-        return HttpResponse(status=400)
-    except stripe.error.SignatureVerificationError as e:
-        # Invalid signature
+    except (ValueError, stripe.error.SignatureVerificationError):
         return HttpResponse(status=400)
 
     # ✅ Handle payment success
-    if event['type'] == 'payment_intent.succeeded':
-        intent = event['data']['object']
-        payment = Payment.objects.filter(transaction_id=intent['id']).first()
+    if event["type"] == "payment_intent.succeeded":
+        intent = event["data"]["object"]
+        payment = Payment.objects.filter(transaction_id=intent["id"]).first()
         if payment:
             payment.status = "completed"
             payment.paid_at = timezone.now()
             payment.save()
-            
-            # Update order status
             payment.order.status = "processing"
             payment.order.save()
 
     # ✅ Handle payment failed
-    elif event['type'] == 'payment_intent.payment_failed':
-        intent = event['data']['object']
-        payment = Payment.objects.filter(transaction_id=intent['id']).first()
+    elif event["type"] == "payment_intent.payment_failed":
+        intent = event["data"]["object"]
+        payment = Payment.objects.filter(transaction_id=intent["id"]).first()
         if payment:
             payment.status = "failed"
-            payment.save()
-            
-            # Update order status to cancelled if payment fails
             payment.order.status = "cancelled"
             payment.order.save()
+            payment.save()
 
     return HttpResponse(status=200)

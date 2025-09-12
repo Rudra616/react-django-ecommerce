@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 import re  # Regular expressions for validation
-from datetime import date,timezone
+from datetime import date
+from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import Product , Order, OrderItem, Payment, Product ,Cart,Review ,Category

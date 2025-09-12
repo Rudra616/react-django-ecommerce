@@ -1232,19 +1232,13 @@ export const debugOrderData = async (orderId) => {
 // apis.js - TEMPORARY FIX for createOrder function
 // apis.js - Update createOrder function for new response format
 // apis.js - Update createOrder to show detailed errors
-export const createOrder = async (cartItems) => {
+// apis.js - Update createOrder function
+export const createOrder = async (orderData) => {
   try {
     const accessToken = await getValidToken();
     if (!accessToken) {
       throw new Error("Authentication required");
     }
-
-    const orderData = {
-      items: cartItems.map(item => ({
-        product: item.product.id || item.product, // Handle both cases
-        quantity: item.quantity
-      }))
-    };
 
     console.log("Sending order data:", orderData);
 
@@ -1268,15 +1262,13 @@ export const createOrder = async (cartItems) => {
       return {
         success: false,
         error: `Server returned non-JSON response (${response.status})`,
-        status: response.status,
-        rawResponse: text
+        status: response.status
       };
     }
 
     console.log("Order creation response:", data);
 
     if (response.ok) {
-      // Extract order ID from the new response format
       let orderId;
       
       if (data.order && data.order.id) {
@@ -1294,7 +1286,6 @@ export const createOrder = async (cartItems) => {
         orderId: orderId
       };
     } else {
-      // Return detailed error information
       return {
         success: false,
         error: data.error || data.detail || 'Failed to create order',

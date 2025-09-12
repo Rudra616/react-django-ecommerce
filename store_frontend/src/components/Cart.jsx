@@ -49,10 +49,32 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
         setShowPaymentOptions(true);
     };
 
-    const handleCheckout = () => {
-        setShowCheckout(true);
-    };
+    // Cart.jsx - Update handleCheckout
+    const handleCheckout = async () => {
+        if (!selectedPaymentMethod) {
+            setCheckoutError("Please select a payment method");
+            return;
+        }
 
+        setIsCheckingOut(true);
+        setCheckoutError("");
+
+        try {
+            // For COD, we don't need to create a separate payment
+            // The payment is created during order creation
+            if (selectedPaymentMethod === 'cod') {
+                setShowCheckout(true);
+                return;
+            }
+
+            // For other payment methods, proceed normally
+            setShowCheckout(true);
+        } catch (error) {
+            setCheckoutError(error.message);
+        } finally {
+            setIsCheckingOut(false);
+        }
+    };
     const handleOrderCreated = (orderData) => {
         setShowCheckout(false);
         onOrderCreated(orderData);

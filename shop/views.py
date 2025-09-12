@@ -601,6 +601,8 @@ from django.http import HttpResponse
 
 # Update the PaymentCreateView to handle different payment methods
 # views.py - Update PaymentCreateView with better error handling
+
+# views.py - Update PaymentCreateView to handle existing payments
 class PaymentCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = PaymentSerializer
@@ -624,47 +626,26 @@ class PaymentCreateView(generics.CreateAPIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
+            # Check if payment already exists for this order
+            try:
+                existing_payment = Payment.objects.get(order=order)
+                if existing_payment:
+                    return Response({
+                        "payment_id": existing_payment.id,
+                        "order_id": order.id,
+                        "amount": str(existing_payment.amount),
+                        "status": existing_payment.status,
+                        "message": "Payment already exists for this order"
+                    }, status=status.HTTP_200_OK)
+            except Payment.DoesNotExist:
+                pass  # No existing payment, continue with creation
+
             # Handle different payment methods
             if payment_method == 'card':
-                try:
-                    # Convert to cents for Stripe
-                    amount_cents = int(float(order.total_price) * 100)
-                    
-                    intent = stripe.PaymentIntent.create(
-                        amount=amount_cents,
-                        currency=settings.STRIPE_CURRENCY.lower(),  # Ensure lowercase
-                        payment_method_types=['card'],
-                        metadata={
-                            "order_id": order.id, 
-                            "user_id": request.user.id,
-                            "user_email": request.user.email
-                        },
-                    )
-                except stripe.error.StripeError as e:
-                    logger.error(f"Stripe error: {str(e)}")
-                    return Response(
-                        {"error": f"Payment processing error: {str(e)}"}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                payment = Payment.objects.create(
-                    order=order,
-                    amount=order.total_price,
-                    payment_method=payment_method,
-                    status='pending',
-                    transaction_id=intent.id,
-                )
-
-                return Response({
-                    "payment_id": payment.id,
-                    "order_id": order.id,
-                    "amount": str(order.total_price),
-                    "status": payment.status,
-                    "client_secret": intent.client_secret,
-                    "publishable_key": settings.STRIPE_PUBLISHABLE_KEY
-                }, status=status.HTTP_201_CREATED)
-            
+                # ... card payment logic
+                pass
             elif payment_method == 'cod':
+                # For COD, create payment record
                 payment = Payment.objects.create(
                     order=order,
                     amount=order.total_price,
@@ -678,7 +659,7 @@ class PaymentCreateView(generics.CreateAPIView):
                     "order_id": order.id,
                     "amount": str(order.total_price),
                     "status": payment.status,
-                    "message": "Cash on Delivery order placed successfully"
+                    "message": "Cash on Delivery payment created successfully"
                 }, status=status.HTTP_201_CREATED)
             
             else:
@@ -690,10 +671,9 @@ class PaymentCreateView(generics.CreateAPIView):
         except Exception as e:
             logger.error(f"Payment creation error: {str(e)}")
             return Response(
-                {"error": "Internal server error"}, 
+                {"error": "Internal server error in payment creation"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 # Add a view to confirm payment completion
 class PaymentConfirmView(APIView):
     permission_classes = [permissions.IsAuthenticated]

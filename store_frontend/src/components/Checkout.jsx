@@ -24,6 +24,7 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
     };
 
     // Checkout.jsx - Update handleOrderCreation
+    // Checkout.jsx - Update handleOrderCreation
     const handleOrderCreation = async (orderItems, paymentData = null) => {
         setLoading(true);
         setError('');
@@ -31,9 +32,10 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
         try {
             console.log("Creating order with items:", orderItems);
 
+            // Include payment method in order creation
             const orderResult = await createOrder({
                 items: orderItems,
-                payment_method: paymentMethod // Send payment method with order
+                payment_method: paymentMethod
             });
 
             if (!orderResult.success) {
@@ -43,22 +45,18 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
             const orderId = orderResult.orderId;
             console.log("Order created with ID:", orderId);
 
-            // For COD, create payment and complete order
+            // For COD orders, payment is already created on the backend
+            // Just fetch the order details
             if (paymentMethod === 'cod') {
-                const paymentResult = await createPayment(orderId, 'cod');
-                if (!paymentResult.success) {
-                    throw new Error(paymentResult.error || 'Failed to create COD payment');
-                }
-
-                // Fetch complete order details
+                // Fetch the complete order details
                 const orderDetails = await getOrderDetails(orderId);
                 if (orderDetails.success) {
                     onOrderCreated(orderDetails.order);
                 } else {
-                    // Fallback
+                    // Fallback order data
                     onOrderCreated({
                         id: orderId,
-                        status: 'pending',
+                        status: 'processing',
                         payment_method: 'cod',
                         payment_status: 'pending',
                         total_price: total,
@@ -69,7 +67,7 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
                 return;
             }
 
-            // For card payments, return payment data for Stripe
+            // For card payments, handle payment creation
             if (paymentMethod === 'card') {
                 const paymentResult = await createPayment(orderId, 'card');
                 if (!paymentResult.success) {
@@ -91,18 +89,18 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
         }
     };
 
-    const handleCODPayment = async () => {
-        try {
-            const orderItems = cartItems.map(item => ({
-                product: item.product.id,
-                quantity: item.quantity
-            }));
+    // const handleCODPayment = async () => {
+    //     try {
+    //         const orderItems = cartItems.map(item => ({
+    //             product: item.product.id,
+    //             quantity: item.quantity
+    //         }));
 
-            await handleOrderCreation(orderItems);
-        } catch (err) {
-            setError(err.message);
-        }
-    };
+    //         await handleOrderCreation(orderItems);
+    //     } catch (err) {
+    //         setError(err.message);
+    //     }
+    // };
 
     const handleStripePayment = async () => {
         try {

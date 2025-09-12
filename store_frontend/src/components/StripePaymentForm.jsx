@@ -12,6 +12,7 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
     const [processing, setProcessing] = useState(false);
 
     // StripePaymentForm.jsx - Fix handleSubmit function
+    // StripePaymentForm.jsx - Fix handleSubmit function
     const handleSubmit = async (event) => {
         event.preventDefault();
         setProcessing(true);
@@ -27,7 +28,7 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
             console.log("Creating order for payment");
 
             const orderItems = order.items.map(item => ({
-                product: item.product.id, // Just the product ID
+                product: item.product.id,
                 quantity: item.quantity
             }));
 
@@ -39,7 +40,9 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
                 throw new Error(orderResult.error || 'Failed to create order');
             }
 
-            const orderId = orderResult.data.id;
+            const orderId = orderResult.orderId; // Use orderId from result
+            console.log("Created order with ID:", orderId);
+
             const paymentResult = await createPayment(orderId, 'card');
 
             if (paymentResult.success) {

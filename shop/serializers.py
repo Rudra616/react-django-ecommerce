@@ -477,6 +477,7 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
         fields = ['product', 'quantity']
 
 # In serializers.py - Fix OrderCreateSerializer
+# serializers.py - Fix OrderCreateSerializer to return proper response
 class OrderCreateSerializer(serializers.ModelSerializer):
     items = OrderItemCreateSerializer(many=True)
 
@@ -519,9 +520,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         order.total_price = total_price
         order.save()
 
-        return order
-    
-    
+        return order  # This should return the order object, not the input data
+
+    def to_representation(self, instance):
+        # Return the full order representation, not just the input
+        return OrderSerializer(instance, context=self.context).data
+
 class ShippingAddressSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=255, required=False)
     phone_number = serializers.CharField(max_length=15, required=False)

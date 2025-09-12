@@ -331,6 +331,7 @@ class DebugView(APIView):
             "user": str(request.user) if request.user.is_authenticated else "Anonymous"
         })
 # views.py - Fix OrderListCreateView with better error handling
+# views.py - Fix OrderListCreateView to return proper response
 class OrderListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
@@ -340,46 +341,44 @@ class OrderListCreateView(generics.ListCreateAPIView):
         return OrderSerializer
 
     def get_queryset(self):
-        try:
-            return Order.objects.filter(user=self.request.user).prefetch_related(
-                Prefetch('items', queryset=OrderItem.objects.select_related('product'))
-            ).order_by('-created_at')
-        except Exception as e:
-            print(f"Error in get_queryset: {str(e)}")
-            return Order.objects.none()
+        return Order.objects.filter(user=self.request.user).prefetch_related(
+            Prefetch('items', queryset=OrderItem.objects.select_related('product'))
+        ).order_by('-created_at')
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
 
-    def list(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
         try:
-            queryset = self.filter_queryset(self.get_queryset())
+            # Use the parent create method to handle order creation
+            response = super().create(request, *args, **kwargs)
             
-            # Check if pagination is needed
-            page = self.paginate_queryset(queryset)
-            if page is not None:
-                serializer = self.get_serializer(page, many=True)
-                return self.get_paginated_response(serializer.data)
+            # The response should already contain the created order data
+            # But let's make sure it has the proper structure
+            if response.status_code == status.HTTP_201_CREATED:
+                # If the response is just the input data, we need to fix it
+                if 'items' in response.data and 'id' not in response.data:
+                    # Get the created order from the database
+                    order = Order.objects.filter(user=request.user).latest('created_at')
+                    serializer = OrderSerializer(order, context={'request': request})
+                    response.data = serializer.data
+                
+                return Response({
+                    "success": True,
+                    "order": response.data,
+                    "message": "Order created successfully"
+                }, status=status.HTTP_201_CREATED)
             
-            # No pagination
-            serializer = self.get_serializer(queryset, many=True)
-            return Response({
-                "success": True,
-                "orders": serializer.data,
-                "count": len(serializer.data)
-            })
+            return response
             
         except Exception as e:
-            print(f"Error in OrderListCreateView.list: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error in order creation: {str(e)}")
             return Response({
                 "success": False,
-                "error": "Internal server error while fetching orders"
-            }, status=500)
-
+                "error": "Failed to create order"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 class OrderDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = OrderSerializer

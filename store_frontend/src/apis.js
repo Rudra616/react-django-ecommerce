@@ -1162,6 +1162,7 @@ export const getOrderDetail = async (orderId) => {
 
 // apis.js - Fix createOrder function
 // apis.js - Fix createOrder function with robust handling
+// apis.js - FIXED createOrder function with proper order ID extraction
 export const createOrder = async (cartItems) => {
   try {
     const accessToken = await getValidToken();
@@ -1169,38 +1170,31 @@ export const createOrder = async (cartItems) => {
       throw new Error("Authentication required");
     }
 
-    // Debug the incoming cart items
-    console.log("Raw cart items for order:", cartItems);
-    
-    // Handle different cart item structures
+    // Format order data
     const orderData = {
       items: cartItems.map(item => {
         // Extract product ID from different possible structures
         let productId;
         
         if (item.product && item.product.id) {
-          // Case 1: item has product object with id
           productId = item.product.id;
         } else if (item.product_id) {
-          // Case 2: item has product_id field
           productId = item.product_id;
         } else if (typeof item.product === 'number') {
-          // Case 3: item.product is already the ID
           productId = item.product;
         } else {
-          // Case 4: Fallback - try to extract from any structure
           console.error("Unable to extract product ID from item:", item);
           throw new Error(`Invalid product structure in cart item: ${JSON.stringify(item)}`);
         }
         
         return {
-          product_id: productId,
+          product: productId,
           quantity: item.quantity
         };
       })
     };
 
-    console.log("Processed order data:", orderData);
+    console.log("Sending order data:", orderData);
 
     const response = await fetch(`${API_BASE}orders/`, {
       method: 'POST',
@@ -1211,7 +1205,6 @@ export const createOrder = async (cartItems) => {
       body: JSON.stringify(orderData)
     });
 
-    // Handle HTML responses (like 500 errors)
     const contentType = response.headers.get("content-type");
     let data;
     
@@ -1230,10 +1223,29 @@ export const createOrder = async (cartItems) => {
     console.log("Order creation response:", data);
 
     if (response.ok) {
+      // EXTRACT ORDER ID FROM DIFFERENT POSSIBLE RESPONSE STRUCTURES
+      let orderId;
+      
+      if (data.id) {
+        // Case 1: Direct ID field (most common)
+        orderId = data.id;
+      } else if (data.data && data.data.id) {
+        // Case 2: Nested in data field
+        orderId = data.data.id;
+      } else if (data.order && data.order.id) {
+        // Case 3: Nested in order field
+        orderId = data.order.id;
+      } else {
+        console.error("Unable to extract order ID from response:", data);
+        throw new Error("Failed to extract order ID from server response");
+      }
+
+      console.log("Extracted order ID:", orderId);
+
       return {
         success: true,
         data: data,
-        orderId: data.id
+        orderId: orderId
       };
     } else {
       return {
@@ -1298,16 +1310,20 @@ export const getPaymentDetails = async (orderId) => {
  */
 
 // apis.js - Fix createPayment function
-// apis.js - Fix createPayment function
-export const createPayment = async (orderId, paymentMethod = 'cod') => {
+// apis.js - FIXED createPayment function
+export const createPayment = async (orderId, paymentMethod = 'card') => {
   try {
     const accessToken = await getValidToken();
     if (!accessToken) {
       throw new Error("Authentication required");
     }
 
+    if (!orderId) {
+      throw new Error("Order ID is required for payment");
+    }
+
     const paymentData = {
-      order: orderId,
+      order: orderId, // This should be the order ID (number), not an object
       payment_method: paymentMethod
     };
 
@@ -1519,3 +1535,50 @@ export const debugOrderCreation = async (testData) => {
 // Call this function to test if the endpoint works
 // debugOrderCreation();
 
+
+
+// apis.js - Add this debug function
+export const debugOrderResponse = async () => {
+  try {
+    const accessToken = await getValidToken();
+    if (!accessToken) return { success: false, error: "No token" };
+
+    // Test with a simple order
+    const testOrderData = {
+      items: [{ product: 1, quantity: 1 }] // Use a known product ID
+    };
+
+    const response = await fetch(`${API_BASE}orders/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify(testOrderData)
+    });
+
+    const text = await response.text();
+    console.log("Raw order response:", text);
+    
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error("Failed to parse JSON:", e);
+      return { success: false, rawResponse: text };
+    }
+
+    console.log("Order response structure analysis:", {
+      status: response.status,
+      hasId: !!data.id,
+      hasDataField: !!data.data,
+      hasOrderField: !!data.order,
+      fullResponse: data
+    });
+
+    return { success: response.ok, data, status: response.status };
+  } catch (error) {
+    console.error("Debug error:", error);
+    return { success: false, error: error.message };
+  }
+};

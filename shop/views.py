@@ -332,6 +332,7 @@ class DebugView(APIView):
         })
 # views.py - Fix OrderListCreateView with better error handling
 # views.py - Fix OrderListCreateView to return proper response
+# views.py - Update OrderListCreateView to return detailed errors
 class OrderListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
@@ -345,41 +346,41 @@ class OrderListCreateView(generics.ListCreateAPIView):
             Prefetch('items', queryset=OrderItem.objects.select_related('product'))
         ).order_by('-created_at')
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context['request'] = self.request
-        return context
-
     def create(self, request, *args, **kwargs):
         try:
-            # Use the parent create method to handle order creation
-            response = super().create(request, *args, **kwargs)
-            
-            # The response should already contain the created order data
-            # But let's make sure it has the proper structure
-            if response.status_code == status.HTTP_201_CREATED:
-                # If the response is just the input data, we need to fix it
-                if 'items' in response.data and 'id' not in response.data:
-                    # Get the created order from the database
-                    order = Order.objects.filter(user=request.user).latest('created_at')
-                    serializer = OrderSerializer(order, context={'request': request})
-                    response.data = serializer.data
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                # Save the order
+                order = serializer.save()
                 
+                # Return success response
+                order_serializer = OrderSerializer(order, context={'request': request})
                 return Response({
                     "success": True,
-                    "order": response.data,
+                    "order": order_serializer.data,
                     "message": "Order created successfully"
                 }, status=status.HTTP_201_CREATED)
-            
-            return response
-            
+            else:
+                # Return detailed validation errors
+                return Response({
+                    "success": False,
+                    "error": "Validation failed",
+                    "details": serializer.errors,
+                    "field_errors": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
         except Exception as e:
             print(f"Error in order creation: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
             return Response({
                 "success": False,
-                "error": "Failed to create order"
+                "error": str(e),
+                "details": "Internal server error during order creation"
             }, status=status.HTTP_400_BAD_REQUEST)
-
+        
+        
 class OrderDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]

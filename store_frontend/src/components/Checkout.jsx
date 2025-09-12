@@ -23,6 +23,7 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
     };
 
     // Checkout.jsx - Fix handleCODPayment function
+    // Checkout.jsx - Fix handleCODPayment function
     const handleCODPayment = async () => {
         setLoading(true);
         setError('');
@@ -30,8 +31,14 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
         try {
             console.log("Creating COD order with items:", cartItems);
 
-            // Just pass the raw cart items - let createOrder handle the structure
-            const orderResult = await createOrder(cartItems);
+            const orderItems = cartItems.map(item => ({
+                product: item.product.id, // ← Send only the ID, not the full object
+                quantity: item.quantity
+            }));
+
+            console.log("Sending order data:", { items: orderItems });
+
+            const orderResult = await createOrder(orderItems);
 
             if (!orderResult.success) {
                 throw new Error(orderResult.error || 'Failed to create order');

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // ← Add useEffect import
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { createOrder, createPayment } from '../apis';
@@ -11,8 +11,6 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
     const elements = useElements();
     const [processing, setProcessing] = useState(false);
 
-    // StripePaymentForm.jsx - Fix handleSubmit function
-    // StripePaymentForm.jsx - Fix handleSubmit function
     const handleSubmit = async (event) => {
         event.preventDefault();
         setProcessing(true);
@@ -25,12 +23,28 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
         }
 
         try {
-            console.log("Creating order for payment");
+            console.log("Creating order for payment with items:", order.items);
 
-            const orderItems = order.items.map(item => ({
-                product: item.product.id,
-                quantity: item.quantity
-            }));
+            const orderItems = order.items.map(item => {
+                // Extract product ID safely
+                let productId;
+
+                if (item.product && item.product.id) {
+                    productId = item.product.id;
+                } else if (item.product_id) {
+                    productId = item.product_id;
+                } else if (typeof item.product === 'number') {
+                    productId = item.product;
+                } else {
+                    console.error("Invalid product structure:", item);
+                    throw new Error("Invalid product in cart item");
+                }
+
+                return {
+                    product: productId,
+                    quantity: item.quantity
+                };
+            });
 
             console.log("Sending order data:", { items: orderItems });
 
@@ -40,7 +54,7 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
                 throw new Error(orderResult.error || 'Failed to create order');
             }
 
-            const orderId = orderResult.orderId; // Use orderId from result
+            const orderId = orderResult.orderId;
             console.log("Created order with ID:", orderId);
 
             const paymentResult = await createPayment(orderId, 'card');
@@ -105,6 +119,52 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
 };
 
 const StripePaymentForm = ({ order, onPaymentSuccess, onPaymentError }) => {
+    const [stripeLoaded, setStripeLoaded] = useState(false); // ← Add loading state here
+    const [stripeError, setStripeError] = useState('');
+
+    useEffect(() => {
+        const checkStripe = async () => {
+            try {
+                const stripeInstance = await stripePromise;
+                setStripeLoaded(!!stripeInstance);
+                if (!stripeInstance) {
+                    setStripeError("Failed to load payment system");
+                }
+            } catch (error) {
+                console.error("Stripe loading error:", error);
+                setStripeError("Payment system unavailable. Please try again.");
+                onPaymentError("Payment system unavailable. Please try again.");
+            }
+        };
+
+        checkStripe();
+    }, [onPaymentError]);
+
+    // Show loading state or error
+    if (!stripeLoaded) {
+        return (
+            <div className="text-center p-6">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading payment system...</p>
+                {stripeError && <p className="text-red-500 text-sm mt-2">{stripeError}</p>}
+            </div>
+        );
+    }
+
+    if (stripeError) {
+        return (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                <p>{stripeError}</p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="mt-2 bg-red-600 text-white px-4 py-2 rounded text-sm"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
     return (
         <Elements stripe={stripePromise}>
             <StripeCardForm

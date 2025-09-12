@@ -1163,6 +1163,10 @@ export const getOrderDetail = async (orderId) => {
 // apis.js - Fix createOrder function
 // apis.js - Fix createOrder function with robust handling
 // apis.js - FIXED createOrder function with proper order ID extraction
+
+// apis.js - TEMPORARY FIX for createOrder function
+// apis.js - Update createOrder function for new response format
+// apis.js - Update createOrder to show detailed errors
 export const createOrder = async (cartItems) => {
   try {
     const accessToken = await getValidToken();
@@ -1170,28 +1174,11 @@ export const createOrder = async (cartItems) => {
       throw new Error("Authentication required");
     }
 
-    // Format order data
     const orderData = {
-      items: cartItems.map(item => {
-        // Extract product ID from different possible structures
-        let productId;
-        
-        if (item.product && item.product.id) {
-          productId = item.product.id;
-        } else if (item.product_id) {
-          productId = item.product_id;
-        } else if (typeof item.product === 'number') {
-          productId = item.product;
-        } else {
-          console.error("Unable to extract product ID from item:", item);
-          throw new Error(`Invalid product structure in cart item: ${JSON.stringify(item)}`);
-        }
-        
-        return {
-          product: productId,
-          quantity: item.quantity
-        };
-      })
+      items: cartItems.map(item => ({
+        product: item.product.id || item.product, // Handle both cases
+        quantity: item.quantity
+      }))
     };
 
     console.log("Sending order data:", orderData);
@@ -1216,31 +1203,25 @@ export const createOrder = async (cartItems) => {
       return {
         success: false,
         error: `Server returned non-JSON response (${response.status})`,
-        status: response.status
+        status: response.status,
+        rawResponse: text
       };
     }
 
     console.log("Order creation response:", data);
 
     if (response.ok) {
-      // EXTRACT ORDER ID FROM DIFFERENT POSSIBLE RESPONSE STRUCTURES
+      // Extract order ID from the new response format
       let orderId;
       
-      if (data.id) {
-        // Case 1: Direct ID field (most common)
-        orderId = data.id;
-      } else if (data.data && data.data.id) {
-        // Case 2: Nested in data field
-        orderId = data.data.id;
-      } else if (data.order && data.order.id) {
-        // Case 3: Nested in order field
+      if (data.order && data.order.id) {
         orderId = data.order.id;
+      } else if (data.id) {
+        orderId = data.id;
       } else {
         console.error("Unable to extract order ID from response:", data);
         throw new Error("Failed to extract order ID from server response");
       }
-
-      console.log("Extracted order ID:", orderId);
 
       return {
         success: true,
@@ -1248,11 +1229,12 @@ export const createOrder = async (cartItems) => {
         orderId: orderId
       };
     } else {
+      // Return detailed error information
       return {
         success: false,
         error: data.error || data.detail || 'Failed to create order',
-        status: response.status,
-        fieldErrors: data
+        details: data.details || data.field_errors || data,
+        status: response.status
       };
     }
   } catch (error) {
@@ -1263,6 +1245,7 @@ export const createOrder = async (cartItems) => {
     };
   }
 };
+
 // apis.js - Add server test function
 export const testServerConnection = async () => {
   try {
@@ -1311,6 +1294,7 @@ export const getPaymentDetails = async (orderId) => {
 
 // apis.js - Fix createPayment function
 // apis.js - FIXED createPayment function
+// apis.js - Fix createPayment function to handle empty responses
 export const createPayment = async (orderId, paymentMethod = 'card') => {
   try {
     const accessToken = await getValidToken();
@@ -1323,7 +1307,7 @@ export const createPayment = async (orderId, paymentMethod = 'card') => {
     }
 
     const paymentData = {
-      order: orderId, // This should be the order ID (number), not an object
+      order: orderId,
       payment_method: paymentMethod
     };
 
@@ -1338,7 +1322,16 @@ export const createPayment = async (orderId, paymentMethod = 'card') => {
       body: JSON.stringify(paymentData),
     });
 
-    const data = await res.json();
+    // Handle empty responses
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      // If response is empty or not JSON
+      console.warn("Payment response is not JSON or empty");
+      data = {};
+    }
+
     console.log("Payment creation response:", data);
 
     if (res.ok) {
@@ -1358,7 +1351,6 @@ export const createPayment = async (orderId, paymentMethod = 'card') => {
     };
   }
 };
-
 /**
  * Update order status
  * @param {number} orderId - ID of the order
@@ -1392,6 +1384,28 @@ export const testOrderEndpoint = async () => {
   } catch (err) {
     console.error("GET orders error:", err);
     return { success: false, error: err.message };
+  }
+};
+// apis.js - Add debug function for card payment
+export const debugCardPayment = async (orderId) => {
+  try {
+    console.log("Testing card payment for order:", orderId);
+    
+    // Test payment creation
+    const paymentResult = await createPayment(orderId, 'card');
+    console.log("Payment creation result:", paymentResult);
+    
+    if (paymentResult.success) {
+      console.log("Payment intent created successfully");
+      console.log("Client secret:", paymentResult.data.client_secret);
+      return paymentResult;
+    } else {
+      console.error("Payment creation failed:", paymentResult.error);
+      return paymentResult;
+    }
+  } catch (error) {
+    console.error("Card payment debug error:", error);
+    return { success: false, error: error.message };
   }
 };
 // Add to apis.js
@@ -1432,33 +1446,39 @@ export const debugCartItems = async () => {
 
 // Add this debug function
 // Add to apis.js
+
 export const debugCartStructure = async () => {
   try {
     const res = await authFetch(`${API_BASE}cart/`);
     const data = await res.json();
-    console.log("Cart structure debug:", data);
     
-    // Check the first item structure
-    const firstItem = data.results?.[0] || data?.[0];
-    if (firstItem) {
-      console.log("First cart item structure:", {
-        id: firstItem.id,
-        quantity: firstItem.quantity,
-        product: firstItem.product,
-        product_id: firstItem.product_id,
-        has_product_object: !!firstItem.product,
-        has_product_id: !!firstItem.product_id,
-        product_type: typeof firstItem.product
+    console.log("Cart structure analysis:");
+    
+    const cartItems = data.results || data;
+    if (Array.isArray(cartItems)) {
+      cartItems.forEach((item, index) => {
+        console.log(`Item ${index}:`, {
+          id: item.id,
+          quantity: item.quantity,
+          product: item.product,
+          product_type: typeof item.product,
+          has_product_object: !!item.product,
+          has_product_id: !!item.product_id,
+          product_structure: item.product ? {
+            id: item.product.id,
+            name: item.product.name,
+            price: item.product.price
+          } : 'NO PRODUCT OBJECT'
+        });
       });
     }
     
-    return { success: true, data };
-  } catch (err) {
-    console.error("Debug error:", err);
-    return { success: false, error: err.message };
+    return { success: true, data: cartItems };
+  } catch (error) {
+    console.error("Cart debug error:", error);
+    return { success: false, error: error.message };
   }
 };
-
 // Call this in your Cart component to debug
 // debugCartStructure();
 
@@ -1495,43 +1515,62 @@ const debugRequest = async (url, options) => {
 
 // Add this debug function
 // apis.js - Add debug function
-export const debugOrderCreation = async (testData) => {
+export const debugOrderCreation = async (testData = null) => {
   try {
     const accessToken = await getValidToken();
-    
+    if (!accessToken) return { success: false, error: "No token" };
+
+    const testOrderData = testData || {
+      items: [{ product: 2, quantity: 1 }]
+    };
+
+    console.log("Testing order creation with:", testOrderData);
+
     const response = await fetch(`${API_BASE}orders/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       },
-      body: JSON.stringify(testData || {
-        items: [
-          {
-            product: 1,  // Use a known product ID
-            quantity: 1
-          }
-        ]
-      })
+      body: JSON.stringify(testOrderData)
     });
 
-    const responseText = await response.text();
-    console.log("Debug response status:", response.status);
-    console.log("Debug response text:", responseText);
+    const text = await response.text();
+    console.log("Raw order response:", text);
     
     let data;
     try {
-      data = JSON.parse(responseText);
+      data = JSON.parse(text);
     } catch (e) {
-      data = { raw: responseText };
+      console.error("Failed to parse JSON:", e);
+      return { 
+        success: false, 
+        rawResponse: text,
+        status: response.status 
+      };
     }
-    
-    return { success: response.ok, data, status: response.status };
-  } catch (err) {
-    console.error("Debug test error:", err);
-    return { success: false, error: err.message };
+
+    console.log("Detailed order response:", {
+      status: response.status,
+      data: data,
+      hasError: !!data.error,
+      hasDetails: !!data.details,
+      hasFieldErrors: !!data.field_errors
+    });
+
+    return { 
+      success: response.ok, 
+      data, 
+      status: response.status,
+      rawResponse: text
+    };
+  } catch (error) {
+    console.error("Order creation debug error:", error);
+    return { success: false, error: error.message };
   }
 };
+
+
 // Call this function to test if the endpoint works
 // debugOrderCreation();
 
@@ -1582,3 +1621,85 @@ export const debugOrderResponse = async () => {
     return { success: false, error: error.message };
   }
 };
+// apis.js - Add payment debug function
+export const debugPaymentEndpoint = async () => {
+  try {
+    console.log("Testing payment endpoint...");
+    
+    const accessToken = await getValidToken();
+    if (!accessToken) {
+      return { success: false, error: "No access token" };
+    }
+
+    // Test if endpoint exists
+    const optionsResponse = await fetch(`${API_BASE}payments/`, {
+      method: "OPTIONS",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`
+      }
+    });
+
+    console.log("Payment endpoint OPTIONS response:", {
+      status: optionsResponse.status,
+      headers: Object.fromEntries([...optionsResponse.headers])
+    });
+
+    // Test with a simple request
+    const testResponse = await fetch(`${API_BASE}payments/`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`
+      }
+    });
+
+    const testData = await testResponse.json().catch(() => ({}));
+    
+    return {
+      success: true,
+      optionsStatus: optionsResponse.status,
+      getStatus: testResponse.status,
+      getData: testData
+    };
+
+  } catch (error) {
+    console.error("Payment endpoint debug error:", error);
+    return { success: false, error: error.message };
+  }
+};
+window.debugCardPayment = debugCardPayment;
+window.createOrder = createOrder;
+debugPaymentEndpoint().then(result => {
+  console.log("Payment endpoint debug:", result);
+});
+
+// Test 2: Test COD with correct data
+createOrder([{product: 2, quantity: 1}]).then(result => {
+  console.log("COD test:", result);
+});
+
+// Test 3: Test card payment complete flow
+createOrder([{product: 2, quantity: 1}]).then(orderResult => {
+  console.log("Order result:", orderResult);
+  
+  if (orderResult.success) {
+    createPayment(orderResult.orderId, 'card').then(paymentResult => {
+      console.log("Payment result:", paymentResult);
+    });
+  }
+});
+
+debugCartStructure().then(result => {
+  console.log("Cart structure:", result);
+});
+
+// Test 2: Debug order creation with detailed errors
+debugOrderCreation().then(result => {
+  console.log("Order creation debug:", result);
+});
+
+// Test 3: Test with simple data
+debugOrderCreation({
+  items: [{ product: 2, quantity: 1 }]
+}).then(result => {
+  console.log("Simple test:", result);
+});

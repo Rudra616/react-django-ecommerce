@@ -318,6 +318,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
 # In views.py - update OrderListCreateView
 # In views.py - Update OrderListCreateView
 # In views.py - Update OrderListCreateView
+# views.py - Fix OrderListCreateView
 class OrderListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
@@ -336,6 +337,28 @@ class OrderListCreateView(generics.ListCreateAPIView):
         context['request'] = self.request
         return context
 
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            page = self.paginate_queryset(queryset)
+            
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                "success": True,
+                "orders": serializer.data,
+                "count": len(serializer.data)
+            })
+        except Exception as e:
+            print(f"Error in OrderListCreateView: {str(e)}")
+            return Response({
+                "success": False,
+                "error": "Internal server error"
+            }, status=500)
+        
 class OrderDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]

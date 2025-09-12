@@ -1064,6 +1064,7 @@ export const resetPassword = async (uidb64, token, newPassword) => {
  */
 // Update your getOrders function to debug the actual response
 // In apis.js - Update getOrders function
+// apis.js - Update getOrders function
 export const getOrders = async () => {
   try {
     console.log("Fetching orders from:", `${API_BASE}orders/`);
@@ -1071,12 +1072,26 @@ export const getOrders = async () => {
     
     console.log("Orders response status:", res.status);
     
+    // Check if response is JSON
+    const contentType = res.headers.get("content-type");
+    let data;
+    
+    if (contentType && contentType.includes("application/json")) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+      console.error("Non-JSON response from orders:", text.substring(0, 200));
+      return { 
+        success: false, 
+        orders: [], 
+        error: `Server error (${res.status}) - Please try again later.` 
+      };
+    }
+    
     if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+      throw new Error(data.error || `HTTP error! status: ${res.status}`);
     }
 
-    const data = await res.json();
     console.log("Orders API response:", data);
     
     // Handle both response formats
@@ -1144,6 +1159,8 @@ export const getOrderDetail = async (orderId) => {
 // Update createOrder function in apis.js
 // Fix the createOrder function in apis.js
 // apis.js - Fix createOrder function
+
+// apis.js - Fix createOrder function
 export const createOrder = async (cartItems) => {
   try {
     const accessToken = await getValidToken();
@@ -1154,9 +1171,8 @@ export const createOrder = async (cartItems) => {
     // Format items correctly for the backend
     const orderData = {
       items: cartItems.map(item => ({
-        product: item.product.id, // Just the product ID
+        product: item.product.id, // Just the product ID (not an object)
         quantity: item.quantity
-        // Don't include price - backend will get it from product
       }))
     };
 
@@ -1195,6 +1211,7 @@ export const createOrder = async (cartItems) => {
     };
   }
 };
+
 /**
  * Get payment details for an order
  * @param {number} orderId - ID of the order
@@ -1313,6 +1330,7 @@ export const testOrderEndpoint = async () => {
 
 
 // Add this debug function
+// Add to apis.js
 export const debugCartStructure = async () => {
   try {
     const res = await authFetch(`${API_BASE}cart/`);

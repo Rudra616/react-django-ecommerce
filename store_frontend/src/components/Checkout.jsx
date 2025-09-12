@@ -22,6 +22,7 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
         setPaymentMethod(method);
     };
 
+    // Checkout.jsx - Fix handleCODPayment function
     const handleCODPayment = async () => {
         setLoading(true);
         setError('');
@@ -29,19 +30,10 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
         try {
             console.log("Creating COD order with items:", cartItems);
 
-            const orderItems = cartItems.map(item => {
-                const productObject = item.product || {};
-                const productId = productObject.id || item.product_id;
-
-                if (!productId) {
-                    throw new Error("Product ID not found in cart item.");
-                }
-
-                return {
-                    product: productId,
-                    quantity: item.quantity
-                };
-            });
+            const orderItems = cartItems.map(item => ({
+                product_id: item.product.id,  // Changed from product to product_id
+                quantity: item.quantity
+            }));
 
             console.log("Sending order data:", { items: orderItems });
 

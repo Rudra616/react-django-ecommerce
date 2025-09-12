@@ -11,6 +11,7 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
     const elements = useElements();
     const [processing, setProcessing] = useState(false);
 
+    // StripePaymentForm.jsx - Fix handleSubmit function
     const handleSubmit = async (event) => {
         event.preventDefault();
         setProcessing(true);
@@ -25,19 +26,10 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
         try {
             console.log("Creating order for payment");
 
-            const orderItems = order.items.map(item => {
-                const productObject = item.product || {};
-                const productId = productObject.id || item.product_id;
-
-                if (!productId) {
-                    throw new Error("Product ID not found in cart item.");
-                }
-
-                return {
-                    product: productId,
-                    quantity: item.quantity
-                };
-            });
+            const orderItems = order.items.map(item => ({
+                product: item.product.id, // Just the product ID
+                quantity: item.quantity
+            }));
 
             console.log("Sending order data:", { items: orderItems });
 

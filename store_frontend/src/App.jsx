@@ -39,12 +39,34 @@ function App() {
     console.log("Current section:", section);
   }, [section]);
 
-  const handleOrderCreated = (orderData) => {
+  // App.jsx - UPDATED order handling
+  const handleOrderCreated = async (orderData) => {
+    console.log("Order created data:", orderData);
+
+    // Clear cart
     setCartItems([]);
-    setCurrentOrder(orderData);
+
+    // If we have basic order data, try to fetch complete details
+    if (orderData.id && !orderData.items) {
+      try {
+        console.log("Fetching complete order details for:", orderData.id);
+        const orderDetails = await getOrderDetails(orderData.id);
+        if (orderDetails.success) {
+          setCurrentOrder(orderDetails.order);
+        } else {
+          // Use what we have
+          setCurrentOrder(orderData);
+        }
+      } catch (error) {
+        console.error("Error fetching order details:", error);
+        setCurrentOrder(orderData);
+      }
+    } else {
+      setCurrentOrder(orderData);
+    }
+
     setSection('order-confirmation');
   };
-
   const fetchCart = async () => {
     try {
       const res = await getCart();

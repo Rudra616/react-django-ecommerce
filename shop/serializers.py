@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 import re  # Regular expressions for validation
-from datetime import date
+from datetime import date,timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import Product , Order, OrderItem, Payment, Product ,Cart,Review ,Category
@@ -426,19 +426,24 @@ class OrderItemSerializer(serializers.ModelSerializer):
     def get_subtotal(self, obj):
         return obj.quantity * (obj.price or obj.product.price)
 # ---------------- Order Serializer ----------------
-# In serializers.py - Update OrderSerializer
-# serializers.py - Fix OrderSerializer
+# serializers.py - Update OrderSerializer
 class OrderSerializer(serializers.ModelSerializer):
     items = serializers.SerializerMethodField()
     user_detail = serializers.SerializerMethodField()
-    created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S")  # Add this
+    created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S")
+    payment_method = serializers.CharField(source='payment.payment_method', read_only=True)
+    payment_status = serializers.CharField(source='payment.status', read_only=True)
+    transaction_id = serializers.CharField(source='payment.transaction_id', read_only=True)
 
     class Meta:
         model = Order
         fields = [
-            "id", "user_detail", "created_at", "status", "total_price", "items"
+            "id", "user_detail", "created_at", "status", "total_price", 
+            "items", "payment_method", "payment_status", "transaction_id",
+            "shipping_full_name", "shipping_phone", "shipping_address",
+            "shipping_state", "shipping_district", "shipping_pin_code"
         ]
-        read_only_fields = ['id', 'user_detail', 'created_at', 'total_price', 'items']
+        read_only_fields = fields
 
     def get_user_detail(self, obj):
         return {
@@ -447,12 +452,8 @@ class OrderSerializer(serializers.ModelSerializer):
         }
         
     def get_items(self, obj):
-        # Retrieve OrderItems for this order
-        order_items = obj.items.all()  # Use the correct related name
-        # Use OrderItemSerializer for each item
+        order_items = obj.items.all()
         return OrderItemSerializer(order_items, many=True, context=self.context).data
-# ---------------- Order Create Serializer ----------------
-
 # In serializers.py - update OrderCreateSerializer
 # In serializers.py - update OrderCreateSerializer
 class ShippingAddressSerializer(serializers.Serializer):
@@ -478,22 +479,25 @@ class OrderItemCreateSerializer(serializers.ModelSerializer):
 
 # In serializers.py - Fix OrderCreateSerializer
 # serializers.py - Fix OrderCreateSerializer to return proper response
+# views.py - Update OrderCreateSerializer context
 class OrderCreateSerializer(serializers.ModelSerializer):
     items = OrderItemCreateSerializer(many=True)
+    payment_method = serializers.CharField(write_only=True, required=False, default='cod')
 
     class Meta:
         model = Order
-        fields = ['items']
+        fields = ['items', 'payment_method']
     
     @transaction.atomic
     def create(self, validated_data):
         items_data = validated_data.pop('items')
+        payment_method = validated_data.pop('payment_method', 'cod')
         user = self.context['request'].user
         
         if not items_data:
             raise serializers.ValidationError({"items": "Order must have at least one item."})
             
-        order = Order.objects.create(user=user, status='pending')
+        order = Order.objects.create(user=user, status='pending', payment_method=payment_method)
         total_price = 0
 
         for item_data in items_data:
@@ -520,12 +524,21 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         order.total_price = total_price
         order.save()
 
-        return order  # This should return the order object, not the input data
+        # Create payment record
+        if payment_method == 'cod':
+            Payment.objects.create(
+                order=order,
+                payment_method=payment_method,
+                amount=total_price,
+                status='pending',
+                transaction_id=f"COD-{order.id}-{timezone.now().timestamp()}"
+            )
+        elif payment_method == 'card':
+            # Card payment will be created separately during payment process
+            pass
 
-    def to_representation(self, instance):
-        # Return the full order representation, not just the input
-        return OrderSerializer(instance, context=self.context).data
-
+        return order
+    
 class ShippingAddressSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=255, required=False)
     phone_number = serializers.CharField(max_length=15, required=False)

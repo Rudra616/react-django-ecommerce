@@ -1,15 +1,27 @@
-import React, { useState, useEffect } from 'react'; // ← Add useEffect import
+// components/StripePaymentForm.jsx - UPDATED
+import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { createOrder, createPayment } from '../apis';
 
-// Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
-const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
+const StripeCardForm = ({ order, onPaymentInit, onPaymentSuccess, onPaymentError }) => {
     const stripe = useStripe();
     const elements = useElements();
     const [processing, setProcessing] = useState(false);
+    const [cardComplete, setCardComplete] = useState(false);
+    const [cardError, setCardError] = useState('');
+
+    const handleCardChange = (event) => {
+        setCardComplete(event.complete);
+        if (event.error) {
+            setCardError(event.error.message);
+            onPaymentError(event.error.message);
+        } else {
+            setCardError('');
+            onPaymentError('');
+        }
+    };
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -22,63 +34,60 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
             return;
         }
 
+        const cardElement = elements.getElement(CardElement);
+        if (!cardElement) {
+            onPaymentError('Card input not available');
+            setProcessing(false);
+            return;
+        }
+
+        if (!cardComplete) {
+            onPaymentError('Please complete your card details');
+            setProcessing(false);
+            return;
+        }
+
         try {
-            console.log("Creating order for payment with items:", order.items);
-
-            const orderItems = order.items.map(item => {
-                // Extract product ID safely
-                let productId;
-
-                if (item.product && item.product.id) {
-                    productId = item.product.id;
-                } else if (item.product_id) {
-                    productId = item.product_id;
-                } else if (typeof item.product === 'number') {
-                    productId = item.product;
-                } else {
-                    console.error("Invalid product structure:", item);
-                    throw new Error("Invalid product in cart item");
-                }
-
-                return {
-                    product: productId,
-                    quantity: item.quantity
-                };
-            });
-
-            console.log("Sending order data:", { items: orderItems });
-
-            const orderResult = await createOrder(orderItems);
-
-            if (!orderResult.success) {
-                throw new Error(orderResult.error || 'Failed to create order');
+            // Initialize payment and get order data
+            const paymentInit = await onPaymentInit();
+            if (!paymentInit) {
+                throw new Error('Failed to initialize payment');
             }
 
-            const orderId = orderResult.orderId;
-            console.log("Created order with ID:", orderId);
+            const { orderId, paymentData } = paymentInit;
 
-            const paymentResult = await createPayment(orderId, 'card');
-
-            if (paymentResult.success) {
-                const { client_secret } = paymentResult.data;
-
-                const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(client_secret, {
+            // Confirm payment with Stripe
+            const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
+                paymentData.client_secret,
+                {
                     payment_method: {
-                        card: elements.getElement(CardElement),
+                        card: cardElement,
+                        billing_details: {
+                            name: order.shipping_full_name || 'Customer',
+                            email: order.user_email,
+                            phone: order.shipping_phone,
+                            address: {
+                                line1: order.shipping_address,
+                                city: order.shipping_district,
+                                state: order.shipping_state,
+                                postal_code: order.shipping_pin_code,
+                                country: 'IN',
+                            }
+                        }
                     },
-                });
-
-                if (stripeError) {
-                    onPaymentError(stripeError.message);
-                } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-                    onPaymentSuccess({
-                        order_id: orderId,
-                        transaction_id: paymentIntent.id,
-                        status: paymentIntent.status
-                    });
                 }
+            );
+
+            if (stripeError) {
+                onPaymentError(stripeError.message);
+            } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+                onPaymentSuccess({
+                    order_id: orderId,
+                    transaction_id: paymentIntent.id,
+                    status: paymentIntent.status
+                });
             } else {
-                throw new Error(paymentResult.error || 'Failed to create payment intent');
+                onPaymentError('Payment failed. Please try again.');
             }
 
         } catch (error) {
@@ -91,7 +100,7 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="border p-4 rounded-lg">
+            <div className="border p-4 rounded-lg bg-white">
                 <CardElement
                     options={{
                         style: {
@@ -101,66 +110,61 @@ const StripeCardForm = ({ order, onPaymentSuccess, onPaymentError }) => {
                                 '::placeholder': {
                                     color: '#aab7c4',
                                 },
+                                backgroundColor: 'white',
+                            },
+                            invalid: {
+                                color: '#9e2146',
                             },
                         },
+                        hidePostalCode: false,
                     }}
+                    onChange={handleCardChange}
                 />
             </div>
 
+            {cardError && (
+                <p className="text-sm text-red-600">{cardError}</p>
+            )}
+
+            {!cardComplete && !cardError && (
+                <p className="text-sm text-yellow-600">
+                    Please enter complete card details
+                </p>
+            )}
+
             <button
                 type="submit"
-                disabled={!stripe || processing}
-                className="w-full bg-orange-500 text-white py-3 rounded-lg hover:bg-orange-600 disabled:opacity-50"
+                disabled={!stripe || processing || !cardComplete}
+                className="w-full bg-orange-500 text-white py-3 rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-                {processing ? 'Processing...' : `Pay $${order.total_price}`}
+                {processing ? 'Processing...' : `Pay ₹${order.total_price}`}
             </button>
         </form>
     );
 };
 
-const StripePaymentForm = ({ order, onPaymentSuccess, onPaymentError }) => {
-    const [stripeLoaded, setStripeLoaded] = useState(false); // ← Add loading state here
-    const [stripeError, setStripeError] = useState('');
+const StripePaymentForm = ({ order, onPaymentInit, onPaymentSuccess, onPaymentError }) => {
+    const [stripeLoaded, setStripeLoaded] = useState(false);
 
     useEffect(() => {
         const checkStripe = async () => {
             try {
                 const stripeInstance = await stripePromise;
                 setStripeLoaded(!!stripeInstance);
-                if (!stripeInstance) {
-                    setStripeError("Failed to load payment system");
-                }
             } catch (error) {
                 console.error("Stripe loading error:", error);
-                setStripeError("Payment system unavailable. Please try again.");
-                onPaymentError("Payment system unavailable. Please try again.");
+                onPaymentError("Payment system unavailable");
             }
         };
 
         checkStripe();
     }, [onPaymentError]);
 
-    // Show loading state or error
     if (!stripeLoaded) {
         return (
             <div className="text-center p-6">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
                 <p className="text-gray-600">Loading payment system...</p>
-                {stripeError && <p className="text-red-500 text-sm mt-2">{stripeError}</p>}
-            </div>
-        );
-    }
-
-    if (stripeError) {
-        return (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                <p>{stripeError}</p>
-                <button
-                    onClick={() => window.location.reload()}
-                    className="mt-2 bg-red-600 text-white px-4 py-2 rounded text-sm"
-                >
-                    Retry
-                </button>
             </div>
         );
     }
@@ -169,6 +173,7 @@ const StripePaymentForm = ({ order, onPaymentSuccess, onPaymentError }) => {
         <Elements stripe={stripePromise}>
             <StripeCardForm
                 order={order}
+                onPaymentInit={onPaymentInit}
                 onPaymentSuccess={onPaymentSuccess}
                 onPaymentError={onPaymentError}
             />

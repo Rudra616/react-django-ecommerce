@@ -55,6 +55,7 @@ class Cart(models.Model):
 
 # ✅ Order model
 # In models.py - Update Order model to store shipping address snapshot
+# models.py - Update Order model
 class Order(models.Model):
     STATUS_CHOICES = [
         ("pending", "Pending"),
@@ -65,6 +66,13 @@ class Order(models.Model):
         ("completed", "Completed"),
     ]
     
+    PAYMENT_METHOD_CHOICES = [
+        ('cod', 'Cash on Delivery'),
+        ('card', 'Credit/Debit Card'),
+        ('upi', 'UPI'),
+        ('netbanking', 'Net Banking'),
+    ]
+    
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="orders")
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
@@ -72,7 +80,10 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     delivery_date = models.DateField(null=True, blank=True)
     
-    # Shipping address fields (snapshot at time of order)
+    # Payment method stored at order level
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, default='cod')
+    
+    # Shipping address fields
     shipping_full_name = models.CharField(max_length=255, blank=True, null=True)
     shipping_phone = models.CharField(max_length=15, blank=True, null=True)
     shipping_address = models.CharField(max_length=255, blank=True, null=True)
@@ -83,20 +94,6 @@ class Order(models.Model):
     def __str__(self):
         return f"Order #{self.id} by {self.user.username}"
 
-    def save(self, *args, **kwargs):
-        # Auto-fill shipping info from user profile if not set
-        if not self.shipping_full_name and self.user:
-            self.shipping_full_name = f"{self.user.first_name} {self.user.last_name}".strip() or self.user.username
-        if not self.shipping_phone and self.user.phone_number:
-            self.shipping_phone = self.user.phone_number
-        if not self.shipping_address and self.user.address:
-            self.shipping_address = self.user.address
-        if not self.shipping_state and self.user.state:
-            self.shipping_state = self.user.state
-        if not self.shipping_district and self.user.district:
-            self.shipping_district = self.user.district
-        
-        super().save(*args, **kwargs)
 
 # ✅ OrderItem (through table for Order-Product)
 class OrderItem(models.Model):

@@ -154,7 +154,7 @@ const ProductDetail = ({ product, onBack, onAddToCart, cartItems }) => {
                         <div className="aspect-w-4 aspect-h-3 bg-gray-200 rounded-lg overflow-hidden">
                             {product.image ? (
                                 <img
-                                    src={product.image}
+                                    src={product.image_url || product.image} // Try both fields
                                     alt={product.name}
                                     className="w-full h-full object-cover"
                                 />

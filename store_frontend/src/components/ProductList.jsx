@@ -14,9 +14,12 @@ const ProductList = ({ products, onProductClick, loading }) => {
                     onClick={() => onProductClick(product)}
                 >
                     <img
-                        src={product.image}
+                        src={product.image_url || product.image} // Try both fields
                         alt={product.name}
                         className="mx-auto mb-2 h-24 w-24 object-cover rounded-full"
+                        onError={(e) => {
+                            e.target.src = '/placeholder-image.png'; // Fallback image
+                        }}
                     />
                     <h3 className="font-semibold text-lg">{product.name}</h3>
                 </div>

@@ -165,11 +165,10 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
                                     <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 border border-gray-200 rounded-lg">
                                         {/* Product Image */}
                                         <img
-                                            src={item.product?.image}
+                                            src={item.product?.image_url || item.product?.image}
                                             alt={item.product?.name}
                                             className="w-30 h-30 sm:w-40 sm:h-30 object-contain rounded-lg bg-gray-100 p-2 mx-auto sm:mx-0"
                                         />
-
                                         {/* Product Info */}
                                         <div className="flex-1 min-w-0 text-center sm:text-left">
                                             <h3 className="font-semibold text-base sm:text-lg truncate">

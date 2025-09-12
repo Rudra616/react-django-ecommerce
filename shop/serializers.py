@@ -277,12 +277,24 @@ class ProductOrderSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    
     class Meta:
         model = Product
-        fields = "__all__"   # Includes all model fields
+        fields = [
+            "id", "name", "description", "price", "stock", 
+            "category", "category_name", "created_at", "updated_at",
+            "image", "image_url"
+        ]
 
-
-
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
 
 
 # ---------------- Order Create Serializer ----------------
@@ -393,9 +405,6 @@ class CategorySerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.image.url)  # ✅ full URL
             return obj.image.url
         return None
-
-
-
 # ---------------- Product Order Serializer ----------------
 
 

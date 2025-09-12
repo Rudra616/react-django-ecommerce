@@ -89,18 +89,18 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
         }
     };
 
-    // const handleCODPayment = async () => {
-    //     try {
-    //         const orderItems = cartItems.map(item => ({
-    //             product: item.product.id,
-    //             quantity: item.quantity
-    //         }));
+    const handleCODPayment = async () => {
+        try {
+            const orderItems = cartItems.map(item => ({
+                product: item.product.id,
+                quantity: item.quantity
+            }));
 
-    //         await handleOrderCreation(orderItems);
-    //     } catch (err) {
-    //         setError(err.message);
-    //     }
-    // };
+            await handleOrderCreation(orderItems);
+        } catch (err) {
+            setError(err.message);
+        }
+    };
 
     const handleStripePayment = async () => {
         try {

@@ -303,20 +303,32 @@ class ProductSerializer(serializers.ModelSerializer):
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
-        fields = '__all__'
+        fields = ['order', 'payment_method']
         read_only_fields = ['amount', 'status', 'transaction_id', 'paid_at']
 
-
-    def validate(self, data):
-        order = data['order']
-        if data['amount'] != order.total_price:
-            raise serializers.ValidationError({"amount": "Payment amount must match order total."})
-        return data
-
-
-
-
-
+    def create(self, validated_data):
+        order = validated_data['order']
+        payment_method = validated_data.get('payment_method', 'card')
+        
+        # Verify the order belongs to the current user
+        if order.user != self.context['request'].user:
+            raise serializers.ValidationError("You can only create payments for your own orders.")
+        
+        # Check if payment already exists
+        if Payment.objects.filter(order=order).exists():
+            raise serializers.ValidationError("Payment already exists for this order.")
+        
+        # Create payment
+        payment = Payment.objects.create(
+            order=order,
+            amount=order.total_price,
+            payment_method=payment_method,
+            status='pending',
+            transaction_id=f"{payment_method.upper()}-{order.id}-{timezone.now().timestamp()}"
+        )
+        
+        return payment
+    
 # In your serializers.py - Update CartSerializer
 class CartSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)  # Include full product data

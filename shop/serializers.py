@@ -427,16 +427,18 @@ class OrderItemSerializer(serializers.ModelSerializer):
         return obj.quantity * (obj.price or obj.product.price)
 # ---------------- Order Serializer ----------------
 # In serializers.py - Update OrderSerializer
+# serializers.py - Fix OrderSerializer
 class OrderSerializer(serializers.ModelSerializer):
     items = serializers.SerializerMethodField()
     user_detail = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S")  # Add this
 
     class Meta:
         model = Order
         fields = [
-            "id", "user_detail", "order_date", "status", "total_price", "items"
+            "id", "user_detail", "created_at", "status", "total_price", "items"
         ]
-        read_only_fields = ['id', 'user_detail', 'order_date', 'total_price', 'items']
+        read_only_fields = ['id', 'user_detail', 'created_at', 'total_price', 'items']
 
     def get_user_detail(self, obj):
         return {
@@ -446,10 +448,9 @@ class OrderSerializer(serializers.ModelSerializer):
         
     def get_items(self, obj):
         # Retrieve OrderItems for this order
-        order_items = obj.order_items.all()
+        order_items = obj.items.all()  # Use the correct related name
         # Use OrderItemSerializer for each item
         return OrderItemSerializer(order_items, many=True, context=self.context).data
-
 # ---------------- Order Create Serializer ----------------
 
 # In serializers.py - update OrderCreateSerializer
@@ -469,17 +470,14 @@ class ShippingAddressSerializer(serializers.Serializer):
 
 
 class OrderItemCreateSerializer(serializers.ModelSerializer):
-    # This field handles the incoming product ID (integer)
-    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())  # Use 'product' not 'product_id'
 
     class Meta:
         model = OrderItem
         fields = ['product', 'quantity']
 
 # In serializers.py - Fix OrderCreateSerializer
-# Serializer for creating a full order
 class OrderCreateSerializer(serializers.ModelSerializer):
-    # This field now uses the nested OrderItemCreateSerializer to handle a list of items
     items = OrderItemCreateSerializer(many=True)
 
     class Meta:
@@ -491,7 +489,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items')
         user = self.context['request'].user
         
-        # Check for empty items list
         if not items_data:
             raise serializers.ValidationError({"items": "Order must have at least one item."})
             
@@ -523,8 +520,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         order.save()
 
         return order
-
-
+    
+    
 class ShippingAddressSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=255, required=False)
     phone_number = serializers.CharField(max_length=15, required=False)

@@ -397,8 +397,6 @@ class OrderDetailView(generics.RetrieveUpdateAPIView):
         return context
 
 
-# ---------------- Payment API ----------------
-
 # In views.py - Update PaymentCreateView
 
 # Add PaymentListView for retrieving payments

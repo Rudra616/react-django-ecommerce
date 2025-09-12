@@ -110,6 +110,7 @@ class OrderItem(models.Model):
 
     def subtotal(self):
         return self.quantity * self.price
+    
 # ✅ Payment model
 class Payment(models.Model):
     PAYMENT_STATUS = [

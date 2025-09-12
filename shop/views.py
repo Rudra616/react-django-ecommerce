@@ -318,7 +318,19 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
 # In views.py - update OrderListCreateView
 # In views.py - Update OrderListCreateView
 # In views.py - Update OrderListCreateView
-# views.py - Fix OrderListCreateView
+
+# views.py - Add debug endpoint
+class DebugView(APIView):
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request):
+        return Response({
+            "status": "ok",
+            "message": "Server is running",
+            "user_authenticated": request.user.is_authenticated,
+            "user": str(request.user) if request.user.is_authenticated else "Anonymous"
+        })
+# views.py - Fix OrderListCreateView with better error handling
 class OrderListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
@@ -328,9 +340,13 @@ class OrderListCreateView(generics.ListCreateAPIView):
         return OrderSerializer
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).prefetch_related(
-            Prefetch('items', queryset=OrderItem.objects.select_related('product'))
-        ).order_by('-created_at')
+        try:
+            return Order.objects.filter(user=self.request.user).prefetch_related(
+                Prefetch('items', queryset=OrderItem.objects.select_related('product'))
+            ).order_by('-created_at')
+        except Exception as e:
+            print(f"Error in get_queryset: {str(e)}")
+            return Order.objects.none()
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -340,25 +356,31 @@ class OrderListCreateView(generics.ListCreateAPIView):
     def list(self, request, *args, **kwargs):
         try:
             queryset = self.filter_queryset(self.get_queryset())
-            page = self.paginate_queryset(queryset)
             
+            # Check if pagination is needed
+            page = self.paginate_queryset(queryset)
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
                 return self.get_paginated_response(serializer.data)
             
+            # No pagination
             serializer = self.get_serializer(queryset, many=True)
             return Response({
                 "success": True,
                 "orders": serializer.data,
                 "count": len(serializer.data)
             })
+            
         except Exception as e:
-            print(f"Error in OrderListCreateView: {str(e)}")
+            print(f"Error in OrderListCreateView.list: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response({
                 "success": False,
-                "error": "Internal server error"
+                "error": "Internal server error while fetching orders"
             }, status=500)
-        
+
+
 class OrderDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]

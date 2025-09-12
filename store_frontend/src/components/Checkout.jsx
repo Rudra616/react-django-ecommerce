@@ -30,14 +30,8 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
         try {
             console.log("Creating COD order with items:", cartItems);
 
-            const orderItems = cartItems.map(item => ({
-                product_id: item.product.id,  // Changed from product to product_id
-                quantity: item.quantity
-            }));
-
-            console.log("Sending order data:", { items: orderItems });
-
-            const orderResult = await createOrder(orderItems);
+            // Just pass the raw cart items - let createOrder handle the structure
+            const orderResult = await createOrder(cartItems);
 
             if (!orderResult.success) {
                 throw new Error(orderResult.error || 'Failed to create order');

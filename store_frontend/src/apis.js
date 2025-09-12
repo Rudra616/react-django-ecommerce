@@ -1161,6 +1161,7 @@ export const getOrderDetail = async (orderId) => {
 // apis.js - Fix createOrder function
 
 // apis.js - Fix createOrder function
+// apis.js - Fix createOrder function with robust handling
 export const createOrder = async (cartItems) => {
   try {
     const accessToken = await getValidToken();
@@ -1168,15 +1169,38 @@ export const createOrder = async (cartItems) => {
       throw new Error("Authentication required");
     }
 
-    // Format items correctly for the backend
+    // Debug the incoming cart items
+    console.log("Raw cart items for order:", cartItems);
+    
+    // Handle different cart item structures
     const orderData = {
-      items: cartItems.map(item => ({
-        product: item.product.id, // Just the product ID (not an object)
-        quantity: item.quantity
-      }))
+      items: cartItems.map(item => {
+        // Extract product ID from different possible structures
+        let productId;
+        
+        if (item.product && item.product.id) {
+          // Case 1: item has product object with id
+          productId = item.product.id;
+        } else if (item.product_id) {
+          // Case 2: item has product_id field
+          productId = item.product_id;
+        } else if (typeof item.product === 'number') {
+          // Case 3: item.product is already the ID
+          productId = item.product;
+        } else {
+          // Case 4: Fallback - try to extract from any structure
+          console.error("Unable to extract product ID from item:", item);
+          throw new Error(`Invalid product structure in cart item: ${JSON.stringify(item)}`);
+        }
+        
+        return {
+          product_id: productId,
+          quantity: item.quantity
+        };
+      })
     };
 
-    console.log("Sending order data:", orderData);
+    console.log("Processed order data:", orderData);
 
     const response = await fetch(`${API_BASE}orders/`, {
       method: 'POST',
@@ -1187,7 +1211,22 @@ export const createOrder = async (cartItems) => {
       body: JSON.stringify(orderData)
     });
 
-    const data = await response.json();
+    // Handle HTML responses (like 500 errors)
+    const contentType = response.headers.get("content-type");
+    let data;
+    
+    if (contentType && contentType.includes("application/json")) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      console.error("Non-JSON response:", text.substring(0, 200));
+      return {
+        success: false,
+        error: `Server returned non-JSON response (${response.status})`,
+        status: response.status
+      };
+    }
+
     console.log("Order creation response:", data);
 
     if (response.ok) {
@@ -1200,7 +1239,8 @@ export const createOrder = async (cartItems) => {
       return {
         success: false,
         error: data.error || data.detail || 'Failed to create order',
-        status: response.status
+        status: response.status,
+        fieldErrors: data
       };
     }
   } catch (error) {
@@ -1211,7 +1251,18 @@ export const createOrder = async (cartItems) => {
     };
   }
 };
-
+// apis.js - Add server test function
+export const testServerConnection = async () => {
+  try {
+    const response = await fetch(`${API_BASE}debug/`);
+    const data = await response.json();
+    console.log("Server connection test:", data);
+    return { success: true, data };
+  } catch (error) {
+    console.error("Server connection test failed:", error);
+    return { success: false, error: error.message };
+  }
+};
 /**
  * Get payment details for an order
  * @param {number} orderId - ID of the order
@@ -1327,7 +1378,41 @@ export const testOrderEndpoint = async () => {
     return { success: false, error: err.message };
   }
 };
-
+// Add to apis.js
+export const debugCartItems = async () => {
+  try {
+    const res = await authFetch(`${API_BASE}cart/`);
+    const data = await res.json();
+    
+    console.log("Raw cart API response:", data);
+    
+    const cartItems = data.results || data;
+    console.log("Cart items structure:", cartItems);
+    
+    if (Array.isArray(cartItems)) {
+      cartItems.forEach((item, index) => {
+        console.log(`Item ${index}:`, {
+          id: item.id,
+          quantity: item.quantity,
+          product: item.product,
+          has_product: !!item.product,
+          product_type: typeof item.product,
+          product_id: item.product_id,
+          product_structure: item.product ? {
+            id: item.product.id,
+            name: item.product.name,
+            price: item.product.price
+          } : 'NO PRODUCT OBJECT'
+        });
+      });
+    }
+    
+    return { success: true, data: cartItems };
+  } catch (error) {
+    console.error("Debug error:", error);
+    return { success: false, error: error.message };
+  }
+};
 
 // Add this debug function
 // Add to apis.js

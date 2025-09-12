@@ -66,7 +66,7 @@ urlpatterns = [
     path('payments/webhook-debug/', views.webhook_debug, name='webhook-debug'),
     # urls.py - Add debug endpoint
 path('stripe-config/', views.StripeConfigView.as_view(), name='stripe-config'),
-
+    path("debug/", views.DebugView.as_view(), name="debug"),
 
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 

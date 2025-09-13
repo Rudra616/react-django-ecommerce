@@ -604,13 +604,13 @@ from django.http import HttpResponse
 
 # views.py - Update PaymentCreateView to handle existing payments
 
+# views.py - Fix PaymentCreateView for Stripe
 class PaymentCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = PaymentSerializer
 
     def create(self, request, *args, **kwargs):
         try:
-            # Get order ID from request data
             order_id = request.data.get('order')
             payment_method = request.data.get('payment_method', 'card')
 
@@ -621,7 +621,6 @@ class PaymentCreateView(generics.CreateAPIView):
                 )
 
             try:
-                # Get the order instance
                 order = Order.objects.get(id=order_id, user=request.user)
             except Order.DoesNotExist:
                 return Response(
@@ -629,54 +628,70 @@ class PaymentCreateView(generics.CreateAPIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Check if payment already exists for this order
-            if Payment.objects.filter(order=order).exists():
-                existing_payment = Payment.objects.get(order=order)
-                return Response({
-                    "payment_id": existing_payment.id,
-                    "order_id": order.id,
-                    "amount": str(existing_payment.amount),
-                    "status": existing_payment.status,
-                    "message": "Payment already exists for this order"
-                }, status=status.HTTP_200_OK)
-
             # Handle different payment methods
             if payment_method == 'card':
-                # For card payments, create a pending payment
+                try:
+                    # Convert to cents for Stripe
+                    amount_cents = int(float(order.total_price) * 100)
+                    
+                    # Create Stripe PaymentIntent
+                    intent = stripe.PaymentIntent.create(
+                        amount=amount_cents,
+                        currency=settings.STRIPE_CURRENCY.lower(),
+                        payment_method_types=['card'],
+                        metadata={
+                            "order_id": order.id, 
+                            "user_id": request.user.id,
+                            "user_email": request.user.email
+                        },
+                    )
+                    
+                    # Create payment record in database
+                    payment = Payment.objects.create(
+                        order=order,
+                        amount=order.total_price,
+                        payment_method=payment_method,
+                        status='pending',
+                        transaction_id=intent.id,
+                    )
+
+                    # ✅ RETURN CLIENT_SECRET FOR STRIPE
+                    return Response({
+                        "payment_id": payment.id,
+                        "order_id": order.id,
+                        "amount": str(order.total_price),
+                        "status": payment.status,
+                        "client_secret": intent.client_secret,  # ✅ THIS IS CRITICAL
+                        "publishable_key": settings.STRIPE_PUBLISHABLE_KEY
+                    }, status=status.HTTP_201_CREATED)
+                    
+                except stripe.error.StripeError as e:
+                    logger.error(f"Stripe error: {str(e)}")
+                    return Response(
+                        {"error": f"Payment processing error: {str(e)}"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            elif payment_method == 'cod':
+                # For COD, create a payment record with pending status
                 payment = Payment.objects.create(
                     order=order,
                     amount=order.total_price,
                     payment_method=payment_method,
                     status='pending',
-                    transaction_id=f"CARD-{order.id}-{timezone.now().timestamp()}"
-                )
-                
-                # Here you would typically integrate with a payment gateway
-                # For now, we'll just return the payment details
-                return Response({
-                    "payment_id": payment.id,
-                    "order_id": order.id,
-                    "amount": str(order.total_price),
-                    "status": payment.status,
-                    "message": "Card payment initialized. Redirect to payment gateway needed."
-                }, status=status.HTTP_201_CREATED)
-                
-            elif payment_method == 'cod':
-                # For COD, create payment record
-                payment = Payment.objects.create(
-                    order=order,
-                    amount=order.total_price,
-                    payment_method=payment_method,
-                    status='pending',  # COD starts as pending, gets completed on delivery
                     transaction_id=f"COD-{order.id}-{timezone.now().timestamp()}"
                 )
                 
+                # Update order status to processing for COD
+                order.status = 'processing'
+                order.save()
+                
                 return Response({
                     "payment_id": payment.id,
                     "order_id": order.id,
                     "amount": str(order.total_price),
                     "status": payment.status,
-                    "message": "Cash on Delivery payment created successfully"
+                    "message": "Cash on Delivery order placed successfully"
                 }, status=status.HTTP_201_CREATED)
             
             else:
@@ -688,12 +703,11 @@ class PaymentCreateView(generics.CreateAPIView):
         except Exception as e:
             logger.error(f"Payment creation error: {str(e)}")
             import traceback
-            traceback.print_exc()  # This will show the full error in console
+            traceback.print_exc()
             return Response(
-                {"error": f"Internal server error: {str(e)}"}, 
+                {"error": "Internal server error in payment creation"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 # Add a view to confirm payment completion
 class PaymentConfirmView(APIView):
     permission_classes = [permissions.IsAuthenticated]

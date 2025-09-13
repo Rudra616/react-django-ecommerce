@@ -1,5 +1,7 @@
 // App.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from "react";
+import { Elements } from '@stripe/react-stripe-js'; // ✅ ADD THIS IMPORT
+import { loadStripe } from '@stripe/stripe-js'; // ✅ ADD THIS IMPORT
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -17,11 +19,14 @@ import OrderDetailPage from "./components/OrderDetailPage";
 import OrderConfirmation from "./components/OrderConfirmation";
 import {
   getproducts, getProductDetail, getCart, addToCart, updateCartItem,
-  removeCartItem
+  removeCartItem, getOrderDetails // ✅ ADD getOrderDetails IMPORT
 } from "./apis";
 import { useAuth } from "./context/AuthContext";
 import Footer from "./components/Footer";
 import ResetPassword from "./components/ResetPassword";
+
+// ✅ LOAD STRIPE OUTSIDE COMPONENT TO AVOID RECREATING
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 function App() {
   const [section, setSection] = useState("home");
@@ -67,6 +72,7 @@ function App() {
 
     setSection('order-confirmation');
   };
+
   const fetchCart = async () => {
     try {
       const res = await getCart();
@@ -201,112 +207,115 @@ function App() {
     }
   };
 
+  // ✅ WRAP YOUR ENTIRE APP WITH ELEMENTS PROVIDER
   return (
-    <>
-      <Navbar
-        setSection={setSection}
-        onSearch={handleSearch}
-        onCartClick={handleCartClick}
-        currentSection={section}
-      />
-
-      {section === "home" && (
-        <Home
-          onProductClick={handleProductClick}
-          onAddToCart={handleAddToCart}
-          cartItems={cartItems}
-        />
-      )}
-
-      {section === "profile" && (
-        <Profile onBack={() => setSection("home")} />
-      )}
-
-      {section === "login" && <Login setSection={setSection} />}
-
-      {section === "searchResults" && (
-        <SearchResults
-          products={searchResults}
-          onProductClick={handleProductClick}
-          onBackToHome={() => setSection("home")}
-        />
-      )}
-
-      {section === "productDetail" && selectedProduct && (
-        <ProductDetail
-          product={selectedProduct}
-          onBack={handleBackFromProduct}
-          onAddToCart={handleAddToCart}
-          cartItems={cartItems}
-        />
-      )}
-
-      {section === "cart" && (
-        <Cart
-          items={cartItems}
-          onBack={() => setSection("home")}
-          onUpdateCart={handleUpdateCart}
-          onRemoveFromCart={handleRemoveFromCart}
-          onOrderCreated={handleOrderCreated}
-        />
-      )}
-
-      {section === "orders" && (
-        <OrdersPage
-          onBack={() => setSection("home")}
-          onViewOrderDetail={(orderId) => {
-            if (orderId) {
-              setCurrentOrderId(orderId);
-              setSection('order-detail');
-            } else {
-              console.error("Invalid order ID:", orderId);
-            }
-          }}
-        />
-      )}
-
-      {section === "order-detail" && (
-        <OrderDetailPage
-          orderId={currentOrderId}
-          onBack={() => setSection("orders")}
-        />
-      )}
-
-      {section === "order-confirmation" && (
-        <OrderConfirmation
-          order={currentOrder}
-          onBack={() => setSection("home")}
-          onViewOrders={() => setSection("orders")}
-        />
-      )}
-
-      {section === "register" && (
-        <Register
+    <Elements stripe={stripePromise}> {/* ✅ ADD THIS WRAPPER */}
+      <>
+        <Navbar
           setSection={setSection}
-          onSwitchToLogin={() => setSection("login")}
+          onSearch={handleSearch}
+          onCartClick={handleCartClick}
+          currentSection={section}
         />
-      )}
 
-      {section === "about" && <About onBack={() => setSection("home")} />}
+        {section === "home" && (
+          <Home
+            onProductClick={handleProductClick}
+            onAddToCart={handleAddToCart}
+            cartItems={cartItems}
+          />
+        )}
 
-      {section === "process" && <Process onBack={() => setSection("home")} />}
+        {section === "profile" && (
+          <Profile onBack={() => setSection("home")} />
+        )}
 
-      {section === "contact" && <Contact onBack={() => setSection("home")} />}
+        {section === "login" && <Login setSection={setSection} />}
 
-      {section === "reset-password" && (
-        <ResetPassword uid={resetData.uid} token={resetData.token} setSection={setSection} />
-      )}
+        {section === "searchResults" && (
+          <SearchResults
+            products={searchResults}
+            onProductClick={handleProductClick}
+            onBackToHome={() => setSection("home")}
+          />
+        )}
 
-      {section === "verify-email" && (
-        <EmailVerification
-          uidb64={verificationData.uidb64}
-          token={verificationData.token}
-          setSection={setSection}
-        />
-      )}
+        {section === "productDetail" && selectedProduct && (
+          <ProductDetail
+            product={selectedProduct}
+            onBack={handleBackFromProduct}
+            onAddToCart={handleAddToCart}
+            cartItems={cartItems}
+          />
+        )}
 
-      <Footer />
-    </>
+        {section === "cart" && (
+          <Cart
+            items={cartItems}
+            onBack={() => setSection("home")}
+            onUpdateCart={handleUpdateCart}
+            onRemoveFromCart={handleRemoveFromCart}
+            onOrderCreated={handleOrderCreated}
+          />
+        )}
+
+        {section === "orders" && (
+          <OrdersPage
+            onBack={() => setSection("home")}
+            onViewOrderDetail={(orderId) => {
+              if (orderId) {
+                setCurrentOrderId(orderId);
+                setSection('order-detail');
+              } else {
+                console.error("Invalid order ID:", orderId);
+              }
+            }}
+          />
+        )}
+
+        {section === "order-detail" && (
+          <OrderDetailPage
+            orderId={currentOrderId}
+            onBack={() => setSection("orders")}
+          />
+        )}
+
+        {section === "order-confirmation" && (
+          <OrderConfirmation
+            order={currentOrder}
+            onBack={() => setSection("home")}
+            onViewOrders={() => setSection("orders")}
+          />
+        )}
+
+        {section === "register" && (
+          <Register
+            setSection={setSection}
+            onSwitchToLogin={() => setSection("login")}
+          />
+        )}
+
+        {section === "about" && <About onBack={() => setSection("home")} />}
+
+        {section === "process" && <Process onBack={() => setSection("home")} />}
+
+        {section === "contact" && <Contact onBack={() => setSection("home")} />}
+
+        {section === "reset-password" && (
+          <ResetPassword uid={resetData.uid} token={resetData.token} setSection={setSection} />
+        )}
+
+        {section === "verify-email" && (
+          <EmailVerification
+            uidb64={verificationData.uidb64}
+            token={verificationData.token}
+            setSection={setSection}
+          />
+        )}
+
+        <Footer />
+      </>
+    </Elements> // ✅ CLOSE THE ELEMENTS WRAPPER
   );
 }
 

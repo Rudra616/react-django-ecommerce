@@ -5,6 +5,8 @@ import ShippingAddressForm from './ShippingAddressForm';
 import PaymentMethodSelector from './PaymentMethodSelector';
 import StripePaymentForm from './StripePaymentForm';
 import { useAuth } from '../context/AuthContext';
+import StripePaymentWrapper from './StripePaymentWrapper';
+
 
 const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
     const [step, setStep] = useState('address');
@@ -25,6 +27,7 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
 
     // Checkout.jsx - Update handleOrderCreation
     // Checkout.jsx - Update handleOrderCreation
+    // Checkout.jsx - Update handleOrderCreation
     const handleOrderCreation = async (orderItems, paymentData = null) => {
         setLoading(true);
         setError('');
@@ -35,10 +38,14 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
             // Include payment method in order creation
             const orderResult = await createOrder({
                 items: orderItems,
-                payment_method: paymentMethod
+                payment_method: paymentMethod // Use the selected payment method
             });
 
+            console.log("Order creation response:", orderResult);
+
             if (!orderResult.success) {
+                // Log detailed error information
+                console.error("Order creation failed with details:", orderResult);
                 throw new Error(orderResult.error || 'Failed to create order');
             }
 
@@ -67,22 +74,16 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
                 return;
             }
 
-            // For card payments, handle payment creation
+            // For card payments, return the order ID for payment processing
             if (paymentMethod === 'card') {
-                const paymentResult = await createPayment(orderId, 'card');
-                if (!paymentResult.success) {
-                    throw new Error(paymentResult.error || 'Failed to create payment');
-                }
-
                 return {
-                    orderId,
-                    paymentData: paymentResult.data
+                    orderId: orderId
                 };
             }
 
         } catch (err) {
+            console.error("Order creation error details:", err);
             setError(err.message);
-            console.error("Order creation error:", err);
             throw err;
         } finally {
             setLoading(false);
@@ -102,6 +103,9 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
         }
     };
 
+
+    // Checkout.jsx - Update the handleStripePayment function
+    // Checkout.jsx - FIXED handleStripePayment function
     const handleStripePayment = async () => {
         try {
             const orderItems = cartItems.map(item => ({
@@ -109,9 +113,44 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
                 quantity: item.quantity
             }));
 
-            const result = await handleOrderCreation(orderItems);
-            return result; // Returns { orderId, paymentData }
+            console.log("Creating order for Stripe payment with items:", orderItems);
+
+            // Create the order first
+            const orderResult = await createOrder({
+                items: orderItems,
+                payment_method: 'card' // Explicitly set payment method
+            });
+
+            console.log("Order creation result:", orderResult);
+
+            if (!orderResult.success) {
+                // Log detailed error information
+                console.error("Order creation failed:", orderResult.error);
+                console.error("Order details:", orderResult.details);
+                throw new Error(orderResult.error || 'Failed to create order');
+            }
+
+            const orderId = orderResult.orderId;
+            console.log("Order created successfully with ID:", orderId);
+
+            // Then create the payment for the order
+            console.log("Creating payment intent for order:", orderId);
+            const paymentResult = await createPayment(orderId, 'card');
+
+            console.log("Payment creation result:", paymentResult);
+
+            if (!paymentResult.success) {
+                throw new Error(paymentResult.error || 'Failed to create payment');
+            }
+
+            // ✅ RETURN PROPER DATA STRUCTURE WITH CLIENT_SECRET
+            return {
+                orderId: orderId,
+                paymentData: paymentResult.data
+            };
+
         } catch (err) {
+            console.error("Stripe payment error details:", err);
             setError(err.message);
             return null;
         }
@@ -224,7 +263,7 @@ const Checkout = ({ cartItems, onOrderCreated, onBack }) => {
 
                             {/* Payment Form */}
                             {paymentMethod === 'card' ? (
-                                <StripePaymentForm
+                                <StripePaymentWrapper
                                     order={{
                                         total_price: total,
                                         shipping_full_name: shippingAddress.full_name,

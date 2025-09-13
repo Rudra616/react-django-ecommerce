@@ -1,23 +1,13 @@
-// Update Cart.jsx to include payment method selection
+// Update Cart.jsx to work without payment method selection
 import React, { useState } from "react";
-import { createOrder, createPayment } from "../apis";
 import { useAuth } from "../context/AuthContext";
 import Checkout from "./Checkout";
+
 const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated }) => {
     const [updatingItems, setUpdatingItems] = useState({});
-    const [isCheckingOut, setIsCheckingOut] = useState(false);
     const [checkoutError, setCheckoutError] = useState("");
-    const [showPaymentOptions, setShowPaymentOptions] = useState(false);
-    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
     const { isLoggedIn } = useAuth();
     const [showCheckout, setShowCheckout] = useState(false);
-
-    const paymentMethods = [
-        { id: 'cod', name: 'Cash on Delivery', icon: '💰' },
-        { id: 'card', name: 'Credit/Debit Card', icon: '💳' },
-        { id: 'upi', name: 'UPI Payment', icon: '📱' },
-        { id: 'netbanking', name: 'Net Banking', icon: '🏦' }
-    ];
 
     const handleQuantityChange = async (itemId, newQuantity) => {
         if (newQuantity >= 1 && newQuantity <= 5) {
@@ -41,40 +31,14 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
         setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
     };
 
-    const handleProceedToPayment = () => {
+    const handleProceedToCheckout = () => {
         if (!isLoggedIn) {
             setCheckoutError("Please login to proceed with checkout");
             return;
         }
-        setShowPaymentOptions(true);
+        setShowCheckout(true);
     };
 
-    // Cart.jsx - Update handleCheckout
-    const handleCheckout = async () => {
-        if (!selectedPaymentMethod) {
-            setCheckoutError("Please select a payment method");
-            return;
-        }
-
-        setIsCheckingOut(true);
-        setCheckoutError("");
-
-        try {
-            // For COD, we don't need to create a separate payment
-            // The payment is created during order creation
-            if (selectedPaymentMethod === 'cod') {
-                setShowCheckout(true);
-                return;
-            }
-
-            // For other payment methods, proceed normally
-            setShowCheckout(true);
-        } catch (error) {
-            setCheckoutError(error.message);
-        } finally {
-            setIsCheckingOut(false);
-        }
-    };
     const handleOrderCreated = (orderData) => {
         setShowCheckout(false);
         onOrderCreated(orderData);
@@ -90,17 +54,14 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
         );
     }
 
-
     const calculateTotals = () => {
         const subtotal = items.reduce((sum, item) => sum + (Number(item.product?.price || 0) * item.quantity), 0);
-        const shipping = subtotal > 500 ? 0 : 50;
-        const tax = subtotal * 0.18;
-        const total = subtotal + shipping + tax;
+        const total = subtotal; // Removed shipping and tax for simplicity
 
-        return { subtotal, shipping, tax, total };
+        return { subtotal, total };
     };
 
-    const { subtotal, shipping, tax, total } = calculateTotals();
+    const { subtotal, total } = calculateTotals();
 
     if (!items || items.length === 0) {
         return (
@@ -229,7 +190,7 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
                         </div>
                     </div>
 
-                    {/* Order Summary & Payment */}
+                    {/* Order Summary */}
                     <div className="w-full lg:w-96">
                         <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 sticky top-4">
                             <h3 className="text-lg sm:text-xl font-bold mb-4">Order Summary</h3>
@@ -239,14 +200,6 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
                                     <span>Subtotal ({items.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
                                     <span>₹{subtotal.toFixed(2)}</span>
                                 </div>
-                                <div className="flex justify-between text-sm sm:text-base">
-                                    <span>Shipping</span>
-                                    <span>{shipping === 0 ? 'Free' : `₹${shipping.toFixed(2)}`}</span>
-                                </div>
-                                <div className="flex justify-between text-sm sm:text-base">
-                                    <span>Tax (18%)</span>
-                                    <span>₹{tax.toFixed(2)}</span>
-                                </div>
                                 <div className="border-t pt-3">
                                     <div className="flex justify-between font-bold text-base sm:text-lg">
                                         <span>Total</span>
@@ -254,56 +207,12 @@ const Cart = ({ items, onBack, onUpdateCart, onRemoveFromCart, onOrderCreated })
                                     </div>
                                 </div>
                             </div>
-
-                            {!showPaymentOptions ? (
-                                <button
-                                    onClick={handleProceedToPayment}
-                                    className="w-full bg-orange-500 text-white py-3 px-6 rounded-lg hover:bg-orange-600 transition font-semibold mb-4 text-sm sm:text-base"
-                                >
-                                    Proceed to Payment
-                                </button>
-                            ) : (
-                                <div className="mb-4">
-                                    <h4 className="font-semibold mb-3">Select Payment Method</h4>
-                                    <div className="space-y-2">
-                                        {paymentMethods.map((method) => (
-                                            <label key={method.id} className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                                                <input
-                                                    type="radio"
-                                                    name="paymentMethod"
-                                                    value={method.id}
-                                                    checked={selectedPaymentMethod === method.id}
-                                                    onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-                                                    className="mr-3"
-                                                />
-                                                <span className="text-xl mr-2">{method.icon}</span>
-                                                <span>{method.name}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-
-                                    <button
-                                        onClick={handleCheckout}
-                                        disabled={isCheckingOut || !selectedPaymentMethod}
-                                        className="w-full bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition font-semibold mt-4 text-sm sm:text-base"
-                                    >
-                                        {isCheckingOut ? "Processing..." : `Pay ₹${total.toFixed(2)}`}
-                                    </button>
-
-                                    <button
-                                        onClick={() => setShowPaymentOptions(false)}
-                                        className="w-full text-gray-600 py-2 px-6 rounded-lg hover:text-gray-800 transition font-medium mt-2 text-sm sm:text-base"
-                                    >
-                                        ← Back to Cart
-                                    </button>
-                                </div>
-                            )}
-
-                            {subtotal < 500 && (
-                                <p className="text-xs sm:text-sm text-center text-gray-600">
-                                    Add ₹{(500 - subtotal).toFixed(2)} more for free shipping!
-                                </p>
-                            )}
+                            <button
+                                onClick={handleProceedToCheckout}
+                                className="w-full bg-orange-500 text-white py-3 px-6 rounded-lg hover:bg-orange-600 transition font-semibold text-sm sm:text-base"
+                            >
+                                Proceed to Checkout
+                            </button>
                         </div>
                     </div>
                 </div>

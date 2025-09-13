@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 // If you downloaded images, import them here
 import img1 from "../assets/images/img1.jpg";
@@ -37,19 +37,40 @@ const CarouselItem = ({ images = [], autoPlay = true, interval = 5000 }) => {
     const slides = images.length > 0 ? images : defaultImages;
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isHovered, setIsHovered] = useState(false);
+    const timerRef = useRef(null);
+
+    const startAutoPlay = () => {
+        if (autoPlay && slides.length > 1) {
+            timerRef.current = setInterval(() => {
+                setCurrentIndex((prevIndex) =>
+                    prevIndex === slides.length - 1 ? 0 : prevIndex + 1
+                );
+            }, interval);
+        }
+    };
+
+    const stopAutoPlay = () => {
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+    };
 
     // Auto-play effect
     useEffect(() => {
-        if (!autoPlay || slides.length === 0 || isHovered) return;
+        startAutoPlay();
+        return () => stopAutoPlay();
+    }, [autoPlay, interval, slides.length]);
 
-        const timer = setInterval(() => {
-            setCurrentIndex((prevIndex) =>
-                prevIndex === slides.length - 1 ? 0 : prevIndex + 1
-            );
-        }, interval);
-
-        return () => clearInterval(timer);
-    }, [slides.length, autoPlay, interval, isHovered]);
+    // Pause on hover
+    useEffect(() => {
+        if (isHovered) {
+            stopAutoPlay();
+        } else {
+            startAutoPlay();
+        }
+        return () => stopAutoPlay();
+    }, [isHovered]);
 
     // Navigation
     const goToPrevious = () => {
@@ -70,7 +91,7 @@ const CarouselItem = ({ images = [], autoPlay = true, interval = 5000 }) => {
 
     return (
         <div
-            className="relative w-full max-w-8xl h-80 md:h-96 lg:h-[500px] overflow-hidden rounded-2xl mb-8 shadow-xl"
+            className="relative w-full max-w-8xl h-80 md:h-96 lg:h-[500px] overflow-hidden rounded-2xl mb-8 shadow-xl group"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
@@ -105,49 +126,47 @@ const CarouselItem = ({ images = [], autoPlay = true, interval = 5000 }) => {
             </div>
 
             {/* Navigation arrows - Only show on hover */}
-            {isHovered && (
-                <>
-                    <button
-                        onClick={goToPrevious}
-                        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-3 transition-all duration-300 backdrop-blur-sm"
-                        aria-label="Previous slide"
+            <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <button
+                    onClick={goToPrevious}
+                    className="bg-black/40 hover:bg-black/60 text-white rounded-full p-3 transition-all duration-300 backdrop-blur-sm"
+                    aria-label="Previous slide"
+                >
+                    <svg
+                        className="w-6 h-6 md:w-7 md:h-7"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                     >
-                        <svg
-                            className="w-6 h-6 md:w-7 md:h-7"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M15 19l-7-7 7-7"
-                            />
-                        </svg>
-                    </button>
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 19l-7-7 7-7"
+                        />
+                    </svg>
+                </button>
 
-                    <button
-                        onClick={goToNext}
-                        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-3 transition-all duration-300 backdrop-blur-sm"
-                        aria-label="Next slide"
+                <button
+                    onClick={goToNext}
+                    className="bg-black/40 hover:bg-black/60 text-white rounded-full p-3 transition-all duration-300 backdrop-blur-sm"
+                    aria-label="Next slide"
+                >
+                    <svg
+                        className="w-6 h-6 md:w-7 md:h-7"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                     >
-                        <svg
-                            className="w-6 h-6 md:w-7 md:h-7"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 5l7 7-7 7"
-                            />
-                        </svg>
-                    </button>
-                </>
-            )}
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                        />
+                    </svg>
+                </button>
+            </div>
 
             {/* Indicators - Modern pill style */}
             <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-2 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full">

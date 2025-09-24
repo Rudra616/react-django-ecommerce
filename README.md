@@ -6,7 +6,7 @@ Frontend live link: https://react-django-ecommerce-frontend.vercel.app/
 
 ⚠️ Note: The backend is hosted on Render (free tier). Due to free-tier limitations, the server may take some time to wake up if inactive.
 If the frontend shows a network error, please try again after a few minutes.
-For any critical issues, contact: 📧 rudrampanchal@gmail.com
+
 .
 ✨ Features
 
@@ -154,8 +154,3 @@ Stripe payments are fully functional in test mode.
 All user and product data are validated for security and consistency.
 
 Local storage is used for tokens and cart persistence, so ensure your browser allows it.
-
-📧 Contact
-
-For any issues, suggestions, or feedback:
-Email: rudrampanchal@gmail.com

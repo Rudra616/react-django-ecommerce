@@ -1,12 +1,5 @@
 This is a full-stack eCommerce web application built using React (Vite) for the frontend and Django + Django REST Framework for the backend. It includes essential features required for an online shopping platform and demonstrates integration with payment gateways, cloud storage, and APIs.
 
-🌐 Live Demo
-
-Frontend live link: https://react-django-ecommerce-frontend.vercel.app/
-
-⚠️ Note: The backend is hosted on Render (free tier). Due to free-tier limitations, the server may take some time to wake up if inactive.
-If the frontend shows a network error, please try again after a few minutes.
-
 .
 ✨ Features
 
